@@ -1,0 +1,12 @@
+# Rust build artifacts
+/target/
+
+# Tauri and installer output
+WixTools/
+*.msi
+*.msix
+*.dmg
+*.app/
+*.deb
+*.rpm
+*.AppImage

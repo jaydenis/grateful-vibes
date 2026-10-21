@@ -1,0 +1,50 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Grateful Vibes",
+  "version": "../package.json",
+  "identifier": "com.gratefulvibes.player",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Grateful Vibes",
+        "width": 1280,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "label": "main",
+        "minWidth": 360,
+        "minHeight": 640,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://archive.org https://*.archive.org; img-src 'self' asset: http://asset.localhost https://asset.localhost data:; media-src 'self' blob: https://archive.org https://*.archive.org; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'",
+      "devCsp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://archive.org https://*.archive.org http://localhost:5173 ws://localhost:5173; img-src 'self' asset: http://asset.localhost https://asset.localhost data:; media-src 'self' blob: https://archive.org https://*.archive.org; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-src 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "android": {
+      "debugApplicationIdSuffix": ".debug"
+    },
+    "publisher": "Grateful Vibes",
+    "copyright": "Grateful Vibes",
+    "category": "Music",
+    "shortDescription": "Grateful Dead live concerts from the Internet Archive.",
+    "longDescription": "Stream one recording of every Grateful Dead concert date, straight from the Internet Archive."
+  }
+}

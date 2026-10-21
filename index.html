@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="Stream Grateful Dead live concerts from the Internet Archive. Stream-only soundboards, on demand."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23ffe600' d='M13.5 2 4 14h6l-1.5 8L19 10h-6z'/%3E%3C/svg%3E"
+    />
+    <title>Grateful Vibes — Grateful Dead live from the Archive</title>
+  </head>
+  <body>
+    <div class="app">
+      <header class="app-header">
+        <div class="app-header-inner">
+          <a class="brand" href="#top" aria-label="Grateful Vibes, back to show list">
+             <img src="src/assets/gd-logo-01.png" alt="Grateful Dead lightning bolt logo on a transparent background" height="48" width="48" />
+            <!-- <svg class="brand-bolt" viewBox="0 0 24 24" aria-hidden="true">
+              <defs>
+                <linearGradient id="boltGradient" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#ffe600" />
+                  <stop offset="55%" stop-color="#ff8a00" />
+                  <stop offset="100%" stop-color="#9bff00" />
+                </linearGradient>
+              </defs>
+              <path fill="url(#boltGradient)" d="M13.5 2 4 14h6l-1.5 8L19 10h-6z" />
+            </svg> -->
+            <span class="brand-text">Grateful <em>Vibes</em></span>
+          </a>
+          <div class="header-actions">
+            <p class="header-meta" id="catalog-count" aria-live="polite"></p>
+            <div class="theme-wrap">
+              <button
+                id="theme-button"
+                class="theme-button"
+                type="button"
+                aria-haspopup="true"
+                aria-expanded="false"
+                aria-controls="theme-menu"
+              >
+                <span id="theme-swatches" class="theme-swatches" aria-hidden="true">
+                  <i></i><i></i><i></i><i></i><i></i>
+                </span>
+                <span id="theme-label" class="theme-button-label" aria-live="polite"
+                  >Electric Vibes</span
+                >
+                <span class="theme-chevron" aria-hidden="true">&#9662;</span>
+              </button>
+              <div id="theme-menu" class="theme-menu" role="dialog" aria-label="Color theme" hidden>
+                <div class="theme-menu-head">
+                  <p class="theme-menu-heading">Color theme</p>
+                  <p class="theme-menu-copy">Saved on this device.</p>
+                </div>
+                <div id="theme-options" class="theme-options" role="group" aria-label="Choose a color theme"></div>
+              </div>
+            </div>
+            <div class="reset-wrap">
+              <button
+                id="reset-data"
+                class="reset-data"
+                type="button"
+                aria-label="Reset data"
+                aria-haspopup="dialog"
+                aria-expanded="false"
+                aria-controls="reset-menu"
+              >
+                <span class="reset-label">Reset data</span>
+                <span class="reset-icon" aria-hidden="true">&#8635;</span>
+              </button>
+              <div id="reset-menu" class="reset-menu" role="dialog" aria-label="Reset saved data" hidden>
+                <p class="reset-menu-copy">
+                  Clear the saved theme, volume, playback position, and recently played shows?
+                </p>
+                <div class="reset-menu-actions">
+                  <button id="reset-confirm" class="btn btn-sm btn-gd" type="button">Reset data</button>
+                  <button id="reset-cancel" class="btn btn-sm btn-outline-gd" type="button">Cancel</button>
+                </div>
+              </div>
+            </div>
+            <p id="reset-status" class="reset-status" role="status" hidden></p>
+          </div>
+        </div>
+      </header>
+
+      <main class="app-main" id="top">
+        <section class="hero">
+          <p class="hero-eyebrow">Internet Archive · stream only</p>
+          <h1>The vault is open.</h1>
+          <p class="hero-sub">
+            One recording per night — the most-viewed version of each Grateful Dead concert, streaming straight from the Archive. <br>
+            Pick a night, press play, and let it melt your face.
+          </p>
+        </section>
+
+        <div class="layout">
+          <section class="catalog" aria-labelledby="catalog-heading">
+            <div class="catalog-toolbar">
+              <h2 id="catalog-heading" class="section-title">Browse shows</h2>
+              <div id="search-wrap" class="search-wrap">
+                <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8" />
+                  <path d="m16 16 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+                <label class="visually-hidden" for="search">Filter loaded shows</label>
+                <input
+                  id="search"
+                  class="form-control search-input"
+                  type="search"
+                  placeholder="Filter venues"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button id="search-clear" class="search-clear" type="button" aria-label="Clear filter" hidden>
+                  &times;
+                </button>
+              </div>
+            </div>
+
+            <div id="catalog-choices" class="choice-grid">
+              <button
+                class="choice-card"
+                type="button"
+                data-dimension="venue"
+                aria-pressed="false"
+              >
+                <svg class="choice-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                  />
+                  <circle cx="12" cy="10" r="2.6" fill="currentColor" />
+                </svg>
+                <span class="choice-label">Venue</span>
+                <span class="choice-hint">Every venue</span>
+              </button>
+
+              <button
+                class="choice-card"
+                type="button"
+                data-dimension="year"
+                aria-pressed="false"
+              >
+                <svg class="choice-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect
+                    x="3.5"
+                    y="5"
+                    width="17"
+                    height="15"
+                    rx="2.5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                  />
+                  <path
+                    d="M3.5 10h17M8 3.5V7M16 3.5V7"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                <span class="choice-label">Year</span>
+                <span class="choice-hint">Every year</span>
+              </button>
+
+              <button
+                class="choice-card"
+                type="button"
+                data-dimension="city"
+                aria-pressed="false"
+              >
+                <svg class="choice-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M3 21h18M6 21V9l5-4v16M11 21V5l6 4v12"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <span class="choice-label">City</span>
+                <span class="choice-hint">Country &rarr; city</span>
+              </button>
+
+              <button
+                class="choice-card"
+                type="button"
+                data-dimension="song"
+                aria-pressed="false"
+              >
+                <svg class="choice-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M9 17V5l10-2v12"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <circle cx="6.5" cy="17.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+                  <circle cx="16.5" cy="15.5" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+                </svg>
+                <span class="choice-label">Song</span>
+                <span class="choice-hint">Every performance</span>
+              </button>
+
+              <button
+                class="choice-card"
+                type="button"
+                data-dimension="history"
+                aria-pressed="false"
+              >
+                <svg class="choice-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3.5" y="5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+                  <path d="M3.5 10h17M8 3.5V7M16 3.5V7M8 14h3m2 0h3m-8 3h3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                </svg>
+                <span class="choice-label">This Day in History</span>
+                <span class="choice-hint">On this date</span>
+              </button>
+            </div>
+
+            <section id="recent" class="recent" aria-labelledby="recent-heading" hidden>
+              <div class="recent-head">
+                <h3 id="recent-heading" class="recent-heading">Recently played</h3>
+                <button id="recent-clear" class="recent-clear" type="button">Clear</button>
+              </div>
+              <ul id="recent-list" class="recent-list"></ul>
+            </section>
+
+            <nav id="drill-bar" class="drill-bar" aria-labelledby="drill-title" hidden>
+              <button id="drill-back" class="drill-back" type="button">
+                &larr; All filters
+              </button>
+              <div class="drill-copy">
+                <p id="drill-kicker" class="drill-kicker"></p>
+                <h3 id="drill-title" class="drill-title" tabindex="-1"></h3>
+              </div>
+            </nav>
+
+            <p id="list-status" class="status" role="status" aria-live="polite"></p>
+
+            <div id="list-alert" class="alert-gd" role="alert" hidden>
+              <span id="list-alert-msg"></span>
+              <button id="list-retry" class="btn btn-sm btn-gd" type="button">Try again</button>
+            </div>
+
+            <ul id="picker-list" class="picker-list" hidden></ul>
+
+            <ul id="show-list" class="show-list"></ul>
+
+            <div id="list-skeleton" class="show-list skeleton-list" aria-hidden="true"></div>
+
+            <div class="load-more-wrap">
+              <button id="load-more" class="btn btn-outline-gd" type="button" hidden>
+                Load more shows
+              </button>
+              <p id="list-end" class="list-end" hidden>That&rsquo;s the whole vault.</p>
+            </div>
+          </section>
+
+          <aside id="panel" class="track-panel" aria-label="Show tracklist">
+            <div id="panel-empty" class="panel-empty">
+              <span class="panel-empty-icon" aria-hidden="true">&#9835;</span>
+              <p>Pick a show to load its setlist.</p>
+            </div>
+
+            <div id="panel-content" hidden>
+              <div class="panel-head">
+                <div class="panel-head-top">
+                  <span id="panel-date" class="panel-eyebrow"></span>
+                  <button id="panel-close" class="panel-close" type="button" aria-label="Close tracklist">
+                    &times;
+                  </button>
+                </div>
+                <h2 id="panel-title" class="panel-title"></h2>
+                <p id="panel-venue" class="panel-venue"></p>
+                <div class="panel-actions">
+                  <button id="panel-play" class="btn btn-gd" type="button">Play show</button>
+                  <a
+                    id="panel-link"
+                    class="btn btn-outline-gd"
+                    href="https://archive.org/"
+                    target="_blank"
+                    rel="noopener"
+                    >On Archive.org &nearr;</a
+                  >
+                </div>
+                <p id="panel-note" class="panel-note" role="status" aria-live="polite"></p>
+              </div>
+
+              <div id="track-search-wrap" class="search-wrap track-search-wrap" hidden>
+                <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8" />
+                  <path d="m16 16 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+                <label class="visually-hidden" for="track-search">Search this setlist by song name</label>
+                <input
+                  id="track-search"
+                  class="form-control search-input"
+                  type="search"
+                  placeholder="Search songs (3+ characters)"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button
+                  id="track-search-clear"
+                  class="search-clear"
+                  type="button"
+                  aria-label="Clear song search"
+                  hidden
+                >
+                  &times;
+                </button>
+              </div>
+              <p id="track-search-status" class="track-search-status" role="status" aria-live="polite"></p>
+
+              <div id="track-skeleton" class="track-skeleton" aria-hidden="true" hidden>
+                <span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <ol id="track-list" class="track-list"></ol>
+            </div>
+          </aside>
+          <div id="panel-backdrop" class="panel-backdrop" hidden></div>
+        </div>
+      </main>
+
+      <footer id="now-playing" class="now-playing" aria-label="Now playing">
+        <div class="np-info">
+          <span class="np-label">Now playing</span>
+          <span id="np-track" class="np-track">Nothing yet</span>
+          <span id="np-show" class="np-show">Pick a show to start</span>
+        </div>
+
+        <div class="np-controls">
+          <div class="np-buttons">
+            <button id="np-prev" class="np-btn" type="button" aria-label="Previous track" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 6h2v12H7zM19 6v12l-9-6z" />
+              </svg>
+            </button>
+            <button id="np-toggle" class="np-btn np-btn-main" type="button" aria-label="Play" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            </button>
+            <button id="np-stop" class="np-btn np-stop" type="button" aria-label="Stop Sonos playback" title="Stop and release room selection" hidden disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z" /></svg>
+            </button>
+            <button id="np-next" class="np-btn" type="button" aria-label="Next track" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 6h2v12h-2zM5 6l9 6-9 6z" />
+              </svg>
+            </button>
+          </div>
+          <div class="np-progress">
+            <span id="np-current" class="np-time">0:00</span>
+            <label class="visually-hidden" for="np-seek">Seek</label>
+            <input id="np-seek" class="range" type="range" min="0" max="100" step="1" value="0" disabled />
+            <span id="np-duration" class="np-time">0:00</span>
+          </div>
+        </div>
+
+        <div class="np-volume">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M4 9h3l4-3.5v13L7 15H4zM15 8.5a5 5 0 0 1 0 7M17.5 6a8 8 0 0 1 0 12"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <label class="visually-hidden" for="np-volume">Volume</label>
+          <input id="np-volume" class="range range-volume" type="range" min="0" max="1" step="0.01" value="0.85" />
+        </div>
+        <div id="np-output" class="np-output" hidden>
+          <label class="visually-hidden" for="np-output-mode">Audio output</label>
+          <select id="np-output-mode" class="form-select form-select-sm np-output-mode" aria-label="Audio output">
+            <option value="local">This device</option>
+            <option value="sonos">Sonos</option>
+          </select>
+          <fieldset id="np-sonos-rooms" class="np-sonos-rooms" hidden disabled>
+            <legend class="visually-hidden">Select one or two Sonos rooms</legend>
+            <span class="visually-hidden">Select one or both players. Stop playback before changing rooms.</span>
+          </fieldset>
+          <button id="np-sonos-refresh" class="np-sonos-refresh" type="button" aria-label="Refresh Sonos rooms" title="Refresh rooms">↻</button>
+          <span id="np-output-status" class="np-output-status" role="status" aria-live="polite"></span>
+        </div>
+      </footer>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

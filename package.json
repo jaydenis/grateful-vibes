@@ -1,0 +1,30 @@
+{
+  "name": "grateful-vibes",
+  "private": true,
+  "version": "1.4.1",
+  "type": "module",
+  "description": "Stream Grateful Dead live concerts from the Internet Archive.",
+  "scripts": {
+    "dev": "npm version patch --no-git-tag-version && vite --host",
+    "build": "npm version minor --no-git-tag-version && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "android:build": "tauri android build",
+    "ios:init": "tauri ios init",
+    "ios:dev": "tauri ios dev",
+    "ios:build": "tauri ios build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-opener": "^2.7.2",
+    "bootstrap": "^5.3.8"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.3",
+    "vite": "^8.3.4"
+  }
+}

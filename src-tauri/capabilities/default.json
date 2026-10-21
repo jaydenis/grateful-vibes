@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Core permissions for the main window, external Archive.org links, and Android back handling.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:app:allow-exit",
+    "opener:default"
+  ]
+}
