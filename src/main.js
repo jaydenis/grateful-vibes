@@ -2,6 +2,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import './style.css';
 import { exit, onBackButtonPress } from '@tauri-apps/api/app';
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { fetchCatalog, fetchShowTracks, fetchSongbook, fetchSongShows } from './api.js';
 import { createPlayer } from './player.js';
@@ -27,6 +28,7 @@ const PAUSE_ICON =
 
 const el = (id) => document.getElementById(id);
 const els = {
+  brandVersion: el('brand-version'),
   catalogCount: el('catalog-count'),
   listStatus: el('list-status'),
   listAlert: el('list-alert'),
@@ -2640,6 +2642,12 @@ async function setupTauriShell() {
   if (!isTauri()) return;
 
   try {
+    await getCurrentWindow().setTitle(`Grateful Vibes v${__APP_VERSION__}`);
+  } catch {
+    /* Title sync is cosmetic; never block the shell setup on it. */
+  }
+
+  try {
     await onBackButtonPress(() => {
       if (els.panel.classList.contains('is-open')) {
         closePanel();
@@ -2665,6 +2673,8 @@ const transportObserver = new ResizeObserver(() => {
   if (height) document.documentElement.style.setProperty('--np-h', `${height}px`);
 });
 transportObserver.observe(nowPlayingEl);
+
+els.brandVersion.textContent = `v${__APP_VERSION__}`;
 
 const bootSettings = loadSettings();
 buildThemeOptions();
