@@ -1,15 +1,17 @@
 {
   "name": "grateful-vibes",
   "private": true,
-  "version": "1.4.1",
+  "version": "1.5.4",
   "type": "module",
   "description": "Stream Grateful Dead live concerts from the Internet Archive.",
   "scripts": {
     "dev": "npm version patch --no-git-tag-version && vite --host",
+    "test": "npm version patch --no-git-tag-version && vite build",
     "build": "npm version minor --no-git-tag-version && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
+    "desktop:test": "tauri dev",
     "desktop:build": "tauri build",
     "android:init": "tauri android init",
     "android:dev": "tauri android dev",

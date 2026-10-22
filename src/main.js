@@ -135,7 +135,7 @@ const output = {
   roomId: '',
   roomIds: [],
   selectionLocked: false,
-  sonos: { queue: [], index: -1, context: null, playing: false, currentTime: 0, duration: 0, volume: 0.5 },
+  sonos: { queue: [], index: -1, context: null, playing: false, sawPlaying: false, currentTime: 0, duration: 0, volume: 0.5 },
   polling: false,
 };
 const mobileQuery = window.matchMedia('(max-width: 991.98px)');
@@ -294,7 +294,7 @@ async function playOnSonos(show, tracks, index, resumeAt = 0) {
   if (!track || track.unavailable) return;
   const browserState = player.snapshot();
   if (browserState.playing) player.toggle();
-  output.sonos = { queue: tracks, index, context: show, playing: true, currentTime: resumeAt, duration: track.duration || 0, volume: output.sonos.volume };
+  output.sonos = { queue: tracks, index, context: show, playing: true, sawPlaying: false, currentTime: resumeAt, duration: track.duration || 0, volume: output.sonos.volume };
   output.selectionLocked = true;
   renderRoomChoices();
   els.npOutputMode.value = 'sonos';
@@ -328,18 +328,28 @@ async function pollSonos() {
   try {
     const status = await invoke('sonos_status', { playerId: output.roomId });
     const wasPlaying = output.sonos.playing;
+    const trackHadStarted = output.sonos.sawPlaying;
+    const previousTime = output.sonos.currentTime;
     output.sonos.currentTime = status.position;
     output.sonos.duration = status.duration || output.sonos.queue[output.sonos.index]?.duration || 0;
     output.sonos.playing = status.state === 'PLAYING';
+    if (output.sonos.playing) output.sonos.sawPlaying = true;
     if (status.transportStatus && status.transportStatus !== 'OK') {
       setOutputStatus('Sonos could not play this stream. Check the Archive.org file format and the speaker’s internet access.', true);
     }
-    if (wasPlaying && !output.sonos.playing && output.sonos.duration > 0 && output.sonos.currentTime >= output.sonos.duration - 3 && output.sonos.index + 1 < output.sonos.queue.length) {
+    const reachedTrackEnd = [previousTime, status.position].some((position) =>
+      output.sonos.duration > 0 && position >= output.sonos.duration - 1,
+    );
+    let advanced = false;
+    if (wasPlaying && trackHadStarted && status.state === 'STOPPED' && reachedTrackEnd && output.sonos.index + 1 < output.sonos.queue.length) {
       output.sonos.index += 1;
       output.sonos.currentTime = 0;
       await invoke('sonos_play', { playerId: output.roomId, url: output.sonos.queue[output.sonos.index].url, title: output.sonos.queue[output.sonos.index].title });
+      output.sonos.playing = true;
+      output.sonos.sawPlaying = false;
+      advanced = true;
     }
-    if (status.state === 'STOPPED' && output.sonos.index + 1 >= output.sonos.queue.length) {
+    if (!advanced && status.state === 'STOPPED' && output.sonos.index + 1 >= output.sonos.queue.length) {
       output.selectionLocked = false;
       renderRoomChoices();
     }
@@ -437,7 +447,7 @@ async function initializeSonos() {
     if (!output.supported) return;
     els.npOutput.hidden = false;
     await refreshSonosRooms();
-    window.setInterval(pollSonos, 2500);
+    window.setInterval(pollSonos, 1000);
   } catch {
     // Sonos output is optional; regular browser playback remains available.
   }

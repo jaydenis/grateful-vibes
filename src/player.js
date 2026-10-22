@@ -78,7 +78,6 @@ export function createPlayer() {
     audio.load();
     updateMediaSession();
     notify('track');
-    if (shouldPlay) startPlayback();
   }
 
   function next() {
@@ -139,6 +138,12 @@ export function createPlayer() {
       pendingSeek = null;
     }
     consecutiveFailures = 0;
+    if (loadShouldPlay) {
+      // Wait until the replacement source is ready before starting it. Calling
+      // play() immediately after src/load can be aborted by desktop webviews.
+      loadShouldPlay = false;
+      startPlayback();
+    }
     notify('time');
   });
   audio.addEventListener('volumechange', () => notify('volume'));
