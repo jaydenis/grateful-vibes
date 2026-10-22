@@ -7,7 +7,7 @@ with no backend and no API keys.
 Make no mistake this was totally vibe coded "Grateful **Vibes**" using: Github Copilot, Freebuff and ChatGPT.
 - Copilot laid down the base.
 - Freebuff offered up some of the best feature suggestions.
-- ChatGPT executed wityh presision. It added Sonos playback in a single prompt.
+- ChatGPT executed with presision. It added Sonos playback in a single prompt.
 
 ![The show catalog](screenshots/home.png)
 
