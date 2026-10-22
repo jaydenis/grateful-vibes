@@ -1993,9 +1993,19 @@ a:hover {
 }
 
 @media (min-width: 992px) {
+  .app-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.95fr) minmax(15rem, 0.95fr);
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .hero {
+    grid-column: 1 / -1;
+  }
+
   .layout {
-    grid-template-columns: minmax(0, 1fr) 390px;
-    gap: 1.6rem;
+    display: contents;
   }
 
   .track-panel {
@@ -2004,7 +2014,7 @@ a:hover {
     bottom: auto;
     z-index: 1;
     width: auto;
-    max-height: calc(100vh - var(--header-h) - var(--np-h) - 2rem);
+    max-height: calc(100vh - var(--header-h) - 2rem);
     padding: 1.15rem 1.15rem 1.25rem;
     background: rgba(18, 23, 36, 0.82);
     border: 1px solid var(--line);
@@ -2013,6 +2023,60 @@ a:hover {
     backdrop-filter: blur(8px);
     transform: none;
     visibility: visible;
+  }
+
+  .now-playing {
+    position: sticky;
+    top: calc(var(--header-h) + 1rem);
+    right: auto;
+    bottom: auto;
+    left: auto;
+    z-index: 1;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 1rem;
+    min-width: 0;
+    max-height: calc(100vh - var(--header-h) - 2rem);
+    padding: 1.15rem;
+    overflow-y: auto;
+    background: rgba(18, 23, 36, 0.82);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 30px rgba(12, 62, 55, 0.06);
+    backdrop-filter: blur(8px);
+  }
+
+  .np-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .np-buttons {
+    justify-content: center;
+  }
+
+  .np-progress {
+    width: 100%;
+    flex: initial;
+  }
+
+  .np-volume {
+    width: 100%;
+  }
+
+  .range-volume {
+    flex: 1;
+  }
+
+  .np-output {
+    grid-column: auto;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .np-output-status {
+    flex: 1 1 100%;
+    max-width: none;
   }
 
   .panel-backdrop {
@@ -2104,14 +2168,5 @@ a:hover {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
-  }
-}
-
-@media (min-width: 1100px) {
-  .now-playing {
-    grid-template-columns: minmax(0, 1fr) minmax(16rem, 1.2fr) auto auto;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.7rem 1.5rem calc(0.7rem + env(safe-area-inset-bottom));
   }
 }
