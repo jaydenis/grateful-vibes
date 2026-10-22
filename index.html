@@ -328,73 +328,72 @@
             </div>
           </aside>
           <div id="panel-backdrop" class="panel-backdrop" hidden></div>
+          <footer id="now-playing" class="now-playing" aria-label="Now playing">
+            <div class="np-info">
+              <span class="np-label">Now playing</span>
+              <span id="np-track" class="np-track">Nothing yet</span>
+              <span id="np-show" class="np-show">Pick a show to start</span>
+            </div>
+
+            <div class="np-controls">
+              <div class="np-buttons">
+                <button id="np-prev" class="np-btn" type="button" aria-label="Previous track" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M7 6h2v12H7zM19 6v12l-9-6z" />
+                  </svg>
+                </button>
+                <button id="np-toggle" class="np-btn np-btn-main" type="button" aria-label="Play" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                </button>
+                <button id="np-stop" class="np-btn np-stop" type="button" aria-label="Stop Sonos playback" title="Stop and release room selection" hidden disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z" /></svg>
+                </button>
+                <button id="np-next" class="np-btn" type="button" aria-label="Next track" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M15 6h2v12h-2zM5 6l9 6-9 6z" />
+                  </svg>
+                </button>
+              </div>
+              <div class="np-progress">
+                <span id="np-current" class="np-time">0:00</span>
+                <label class="visually-hidden" for="np-seek">Seek</label>
+                <input id="np-seek" class="range" type="range" min="0" max="100" step="1" value="0" disabled />
+                <span id="np-duration" class="np-time">0:00</span>
+              </div>
+            </div>
+
+            <div class="np-volume">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M4 9h3l4-3.5v13L7 15H4zM15 8.5a5 5 0 0 1 0 7M17.5 6a8 8 0 0 1 0 12"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <label class="visually-hidden" for="np-volume">Volume</label>
+              <input id="np-volume" class="range range-volume" type="range" min="0" max="1" step="0.01" value="0.85" />
+            </div>
+            <div id="np-output" class="np-output" hidden>
+              <label class="visually-hidden" for="np-output-mode">Audio output</label>
+              <select id="np-output-mode" class="form-select form-select-sm np-output-mode" aria-label="Audio output">
+                <option value="local">This device</option>
+                <option value="sonos">Sonos</option>
+              </select>
+              <fieldset id="np-sonos-rooms" class="np-sonos-rooms" hidden disabled>
+                <legend class="visually-hidden">Select one or two Sonos rooms</legend>
+                <span class="visually-hidden">Select one or both players. Stop playback before changing rooms.</span>
+              </fieldset>
+              <button id="np-sonos-refresh" class="np-sonos-refresh" type="button" aria-label="Refresh Sonos rooms" title="Refresh rooms">↻</button>
+              <span id="np-output-status" class="np-output-status" role="status" aria-live="polite"></span>
+            </div>
+          </footer>
         </div>
       </main>
-
-      <footer id="now-playing" class="now-playing" aria-label="Now playing">
-        <div class="np-info">
-          <span class="np-label">Now playing</span>
-          <span id="np-track" class="np-track">Nothing yet</span>
-          <span id="np-show" class="np-show">Pick a show to start</span>
-        </div>
-
-        <div class="np-controls">
-          <div class="np-buttons">
-            <button id="np-prev" class="np-btn" type="button" aria-label="Previous track" disabled>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M7 6h2v12H7zM19 6v12l-9-6z" />
-              </svg>
-            </button>
-            <button id="np-toggle" class="np-btn np-btn-main" type="button" aria-label="Play" disabled>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </button>
-            <button id="np-stop" class="np-btn np-stop" type="button" aria-label="Stop Sonos playback" title="Stop and release room selection" hidden disabled>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h12v12H6z" /></svg>
-            </button>
-            <button id="np-next" class="np-btn" type="button" aria-label="Next track" disabled>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M15 6h2v12h-2zM5 6l9 6-9 6z" />
-              </svg>
-            </button>
-          </div>
-          <div class="np-progress">
-            <span id="np-current" class="np-time">0:00</span>
-            <label class="visually-hidden" for="np-seek">Seek</label>
-            <input id="np-seek" class="range" type="range" min="0" max="100" step="1" value="0" disabled />
-            <span id="np-duration" class="np-time">0:00</span>
-          </div>
-        </div>
-
-        <div class="np-volume">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              d="M4 9h3l4-3.5v13L7 15H4zM15 8.5a5 5 0 0 1 0 7M17.5 6a8 8 0 0 1 0 12"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.7"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <label class="visually-hidden" for="np-volume">Volume</label>
-          <input id="np-volume" class="range range-volume" type="range" min="0" max="1" step="0.01" value="0.85" />
-        </div>
-        <div id="np-output" class="np-output" hidden>
-          <label class="visually-hidden" for="np-output-mode">Audio output</label>
-          <select id="np-output-mode" class="form-select form-select-sm np-output-mode" aria-label="Audio output">
-            <option value="local">This device</option>
-            <option value="sonos">Sonos</option>
-          </select>
-          <fieldset id="np-sonos-rooms" class="np-sonos-rooms" hidden disabled>
-            <legend class="visually-hidden">Select one or two Sonos rooms</legend>
-            <span class="visually-hidden">Select one or both players. Stop playback before changing rooms.</span>
-          </fieldset>
-          <button id="np-sonos-refresh" class="np-sonos-refresh" type="button" aria-label="Refresh Sonos rooms" title="Refresh rooms">↻</button>
-          <span id="np-output-status" class="np-output-status" role="status" aria-live="polite"></span>
-        </div>
-      </footer>
     </div>
 
     <script type="module" src="/src/main.js"></script>
