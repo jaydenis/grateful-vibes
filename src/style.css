@@ -54,9 +54,9 @@ body {
   color: var(--text);
   background-color: var(--bg);
   background-image:
-    radial-gradient(ellipse at 12% 0%, color-mix(in srgb, var(--theme-1) 16%, transparent), transparent 36rem),
-    radial-gradient(ellipse at 92% 14%, color-mix(in srgb, var(--theme-3) 11%, transparent), transparent 32rem),
-    linear-gradient(145deg, #090b13 0%, var(--bg) 48%, #0b1019 100%);
+    radial-gradient(ellipse at 12% 0%, color-mix(in srgb, var(--theme-1) 16%, transparent), transparent 759rem),
+    radial-gradient(ellipse at 92% 14%, color-mix(in srgb, var(--theme-3) 11%, transparent), transparent 890rem),
+    linear-gradient(145deg, #4c5da0 0%, var(--bg) 48%, #475063 100%);
   font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 15px;
   -webkit-font-smoothing: antialiased;

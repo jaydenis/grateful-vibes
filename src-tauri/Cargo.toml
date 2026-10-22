@@ -6,7 +6,7 @@ authors = ["Grateful Vibes"]
 license = ""
 repository = ""
 edition = "2024"
-rust-version = "1.90"
+rust-version = "1.98"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -25,3 +25,5 @@ tauri = { version = "2.12.4", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+sonos-api = "=0.9.0"
+sonos-discovery = { package = "sonos-sdk-discovery", version = "=0.9.0" }

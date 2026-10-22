@@ -4,14 +4,14 @@
  */
 export const THEMES = [
   {
-    id: 'neon',
-    name: 'Neon',
-    colors: ['#711c91','#ea00d9','#0abdc6','#133e7c','#091833'],
+    id: 'jewel-of-the-jungle',
+    name: 'Jewel of the Jungle',
+    colors: ['#ff9900', '#00cc99', '#FFD700', '#003300', '#597931'],
   },
   {
-    id: 'rhythm-and-blues',
-    name: 'Rhythm & Blues',
-    colors: ['#1E90FF', '#FF4500', '#FFD700', '#8A2BE2', '#F0E68C'],
+    id: 'cool-coastal-breeze',
+    name: 'Cool Coastal Breeze',
+    colors: ['#1E90FF','#bddbe8', '#2c8769', '#00cc00', '#6699cc',  ],
   },
   {
     id: 'vintage-vinyl',
@@ -24,14 +24,14 @@ export const THEMES = [
     colors: ['#FF1493', '#00FF7F', '#7B68EE', '#FF6347', '#FFD700'],
   },
   {
-    id: 'jazz-night',
-    name: 'Jazz Night',
-    colors: ['#4B0082', '#FF4500', '#FFD700', '#2E8B57', '#F5F5DC'],
+    id: 'mermaid-lagoon',
+    name: 'Mermaid Lagoon',
+    colors: ['#28bca9', '#99cccc', '#fb4673', '#61948f', '#F5F5DC'],
   },
   {
     id: 'cyberpunk-2077',
     name: 'Cyberpunk 2077',
-    colors: ['#000000','#c5003c','#880425','#f3e600','#55ead4'],
+    colors: ['#444444','#c5003c','#880425','#f3e600','#55ead4'],
   },
   {
     id: 'explosion',
@@ -131,7 +131,7 @@ export function themeActionColor(colors) {
 /** Pick the text color with better contrast against the theme's action color. */
 export function chooseAccentText(colors) {
   const action = themeActionColor(colors);
-  const dark = '#06201a';
+  const dark = '#777777';
   const light = '#ffffff';
   return contrast(light, action) > contrast(dark, action) ? light : dark;
 }
