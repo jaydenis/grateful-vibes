@@ -1904,6 +1904,10 @@ h3 {
   color: var(--ink-aqua);
 }
 
+.np-preload[data-state='crossfading'] {
+  color: var(--ink-cyan);
+}
+
 .np-controls {
   display: flex;
   align-items: center;

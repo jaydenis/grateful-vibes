@@ -54,6 +54,7 @@ export function createPlayer() {
       hasPrev: index > 0,
       // Surfaced so the transport can show that the next track is ready to roll.
       preload: preload ? { index: preload.index, ready: preloadReady } : null,
+      crossfading: Boolean(fade),
       error: null,
     };
   }
@@ -134,6 +135,7 @@ export function createPlayer() {
     }
     incoming.volume = volumeLevel;
     outgoing.volume = volumeLevel;
+    notify('preload');
   }
 
   /**
@@ -143,6 +145,10 @@ export function createPlayer() {
    */
   function maybeCrossfade() {
     if (fade || index < 0) return false;
+    // A paused transport must never start the incoming track: cancelling a fade pauses
+    // that element, and the outgoing element's trailing time update would otherwise
+    // quietly start it again under a transport that says stopped.
+    if (active.paused || active.ended) return false;
     const nextTrack = queue[index + 1];
     if (!spare || !preload || !preloadReady || !nextTrack || preload.url !== nextTrack.url) {
       return false;
@@ -166,6 +172,7 @@ export function createPlayer() {
         promoteBufferedTrack();
       }
     }, FADE_TICK_MS);
+    notify('preload');
     return true;
   }
 
@@ -243,6 +250,8 @@ export function createPlayer() {
 
     updateMediaSession();
     notify('track');
+    // The overlap ended with the promotion, so the transport's status has to clear.
+    notify('preload');
     startPlayback();
     return true;
   }

@@ -2355,18 +2355,28 @@ let preloadLabel = null;
 
 function renderPreload(snapshot) {
   const preload = snapshot.preload;
-  const label = !preload
-    ? ''
-    : preload.ready
-      ? 'Next track ready'
-      : 'Buffering next…';
+  // Name the incoming track during the fade: the transport title only flips at the
+  // end of the overlap, so this is the only place the next song is announced.
+  const incoming = preload ? snapshot.queue[preload.index] : null;
+  // The overlap outranks the buffer state: while the two tracks are running
+  // together the buffer is no longer the interesting thing.
+  const label = snapshot.crossfading
+    ? incoming?.title
+      ? `Crossfading into ${incoming.title}`
+      : 'Crossfading…'
+    : !preload
+      ? ''
+      : preload.ready
+        ? 'Next track ready'
+        : 'Buffering next…';
   if (label === preloadLabel) return;
   preloadLabel = label;
 
   els.npPreload.hidden = !label;
   els.npPreload.textContent = label;
-  if (label) els.npPreload.dataset.state = preload.ready ? 'ready' : 'buffering';
-  else delete els.npPreload.dataset.state;
+  if (!label) delete els.npPreload.dataset.state;
+  else if (snapshot.crossfading) els.npPreload.dataset.state = 'crossfading';
+  else els.npPreload.dataset.state = preload.ready ? 'ready' : 'buffering';
 }
 
 function renderTransport(snapshot) {
