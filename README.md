@@ -90,9 +90,9 @@ A few platform notes:
   **China Cat Sunflower**, and **Let It Grow**. The choice is saved locally. Palette
   colors are also used as text inks for tags, counts, and alerts, so each one is lifted
   to a readable lightness before being used as ink — fills, borders, and gradients keep
-  the original colors.
-  alerts, so each one is lifted to a readable lightness before being used as ink —
-  fills, borders, and gradients keep the original colors.
+  the original colors. A theme saved under its pre-song slug (for example
+  `electric-vibes`) still resolves to its renamed palette, so an earlier choice is not
+  reset to the default.
 - Places are derived from Archive's free-text `coverage` field. US states and
   Canadian provinces are recognized from codes or full names, country aliases
   are collapsed (`USA`, `England` → United Kingdom, `EN`/`FR`/`GE` codes), and

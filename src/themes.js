@@ -137,9 +137,49 @@ export const THEMES = [
 
 export const DEFAULT_THEME_ID = 'shakedown-street';
 
+/**
+ * Slugs that shipped before each palette was named after a Dead song. Settings
+ * persist the slug, not the palette, so without this map a returning listener
+ * would be quietly dropped back to the default theme by the rename.
+ */
+const LEGACY_THEME_IDS = {
+  'jewel-of-the-jungle': 'scarlet-begonias',
+  'cool-coastal-breeze': 'ripple',
+  'vintage-vinyl': 'brown-eyed-women',
+  'electric-vibes': 'shakedown-street',
+  'mermaid-lagoon': 'ship-of-fools',
+  'cyberpunk-2077': 'dark-star',
+  explosion: 'the-other-one',
+  sunset: 'sugar-magnolia',
+  retrowave: 'touch-of-grey',
+  'rockabilly-shades': 'one-more-saturday-night',
+  'neon-x2': 'truckin',
+  'rock-and-roll-riot': 'casey-jones',
+  'dance-floor': 'i-know-you-rider',
+  rain: 'box-of-rain',
+  'melody-in-motion': 'sugaree',
+  'rhythm-and-blues': 'loser',
+  'jazz-night': 'eyes-of-the-world',
+  'classical-harmony': 'attics-of-my-life',
+  'indie-dreamscape': 'terrapin-station',
+  'pop-art-explosion': 'bertha',
+  'acoustic-sunset': 'peggy-o',
+  'hip-hop-hues': 'franklins-tower',
+  'soulful-shades': 'hes-gone',
+  'folk-festival': 'friend-of-the-devil',
+  'dance-floor-delight': 'china-cat-sunflower',
+  'lyrical-landscape': 'let-it-grow',
+};
+
+/** Resolve a saved slug, whatever generation of names it comes from, to a theme id. */
+export function normalizeThemeId(id) {
+  return LEGACY_THEME_IDS[id] ?? id;
+}
+
 export function getTheme(id) {
+  const themeId = normalizeThemeId(id);
   return (
-    THEMES.find((theme) => theme.id === id) ??
+    THEMES.find((theme) => theme.id === themeId) ??
     THEMES.find((theme) => theme.id === DEFAULT_THEME_ID) ??
     THEMES[0]
   );
