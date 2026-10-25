@@ -31,7 +31,7 @@ directly from disk.
 ### Desktop and mobile
 
 The Tauri 2 shell uses the same Vite frontend and keeps the existing Archive.org
-data flow. Install Rust 1.90+ and the
+data flow. Install Rust 1.98+ (edition 2024) and the
 [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your host OS
 first. The JavaScript CLI is already installed as a dev dependency.
 
@@ -80,12 +80,19 @@ A few platform notes:
   history for that song that also exists in the stream-only vault. Every level
   shows counts and lists that subset newest first, with a one-level back control
   and the four buttons still reachable.
-- Offers 15 named color themes, selectable from the theme chip in the header:
-  **Melody in Motion**, **Rhythm & Blues**, **Vintage Vinyl**, **Electric Vibes**
-  (default), **Jazz Night**, **Classical Harmony**, **Indie Dreamscape**,
-  **Pop Art Explosion**, **Acoustic Sunset**, **Hip-Hop Hues**, **Soulful Shades**,
-  **Folk Festival**, **Rock & Roll Riot**, **Dance Floor Delight**, and
-  **Lyrical Landscape**. The choice is saved locally.
+- Offers 26 color themes, each named after a Grateful Dead song, selectable from the
+  theme chip in the header: **Scarlet Begonias**, **Ripple**, **Brown-Eyed Women**,
+  **Shakedown Street** (default), **Ship of Fools**, **Dark Star**, **The Other One**,
+  **Sugar Magnolia**, **Touch of Grey**, **One More Saturday Night**, **Truckin'**,
+  **Casey Jones**, **I Know You Rider**, **Box of Rain**, **Sugaree**, **Loser**,
+  **Eyes of the World**, **Attics of My Life**, **Terrapin Station**, **Bertha**,
+  **Peggy-O**, **Franklin's Tower**, **He's Gone**, **Friend of the Devil**,
+  **China Cat Sunflower**, and **Let It Grow**. The choice is saved locally. Palette
+  colors are also used as text inks for tags, counts, and alerts, so each one is lifted
+  to a readable lightness before being used as ink — fills, borders, and gradients keep
+  the original colors.
+  alerts, so each one is lifted to a readable lightness before being used as ink —
+  fills, borders, and gradients keep the original colors.
 - Places are derived from Archive's free-text `coverage` field. US states and
   Canadian provinces are recognized from codes or full names, country aliases
   are collapsed (`USA`, `England` → United Kingdom, `EN`/`FR`/`GE` codes), and
@@ -98,8 +105,10 @@ A few platform notes:
 - Loads a show's tracklist from its Archive metadata and starts the first playable
   track automatically. The setlist can be filtered by song name once three
   characters are typed, while keeping the original track numbers and order.
-- Streams via a single persistent `<audio>` element with play/pause, next/previous,
-  seek, volume, and OS media-key integration (Media Session API).
+- Streams with play/pause, next/previous, seek, volume, and OS media-key integration
+  (Media Session API). With under 30 seconds left on a track, the next one is buffered
+  into a second hidden `<audio>` element and takes over the moment the current one ends,
+  so consecutive tracks from a concert run together instead of pausing to reconnect.
 - On desktop, can optionally route playback to one or two discovered Sonos rooms
   over the local network. Two selected rooms join a Sonos group so they play in
   sync. The browser player remains the default output; room selection locks while
@@ -108,6 +117,9 @@ A few platform notes:
   six most recently played shows in `localStorage`. A reload or app restart restores the last track
   paused at the saved timestamp, ready to resume. A **Reset data** control in the
   header clears all of it and restores the default theme and volume.
+- Mirrors the open browse view into the URL — the dimension, its group or city
+  drill-down, the selected song, and the filter text — so a view can be reloaded or
+  shared. Filter changes use `replaceState`, so the back button stays navigation.
 - Handles loading, empty, error, and unavailable-track states.
 
 ## Data endpoints

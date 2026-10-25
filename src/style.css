@@ -14,12 +14,14 @@
   --gd-orange: color-mix(in srgb, var(--theme-1) 58%, var(--theme-3));
   --gd-magenta: color-mix(in srgb, var(--theme-2) 58%, var(--theme-4));
 
-  /* Saturated theme inks stay vivid against the dark stage. */
-  --ink-cyan: var(--theme-1);
-  --ink-aqua: var(--theme-2);
-  --ink-lime: var(--theme-4);
-  --ink-yellow: var(--theme-3);
-  --ink-orange: var(--theme-5);
+  /* Theme inks stay vivid against the dark stage, but each one is the palette color
+     lifted to a readable lightness (see readableInk in themes.js) so small text never
+     disappears. The raw colors above keep driving fills, borders, and gradients. */
+  --ink-cyan: var(--theme-1-ink, var(--theme-1));
+  --ink-aqua: var(--theme-2-ink, var(--theme-2));
+  --ink-lime: var(--theme-4-ink, var(--theme-4));
+  --ink-yellow: var(--theme-3-ink, var(--theme-3));
+  --ink-orange: var(--theme-5-ink, var(--theme-5));
 
   --bg: color-mix(in srgb, var(--theme-1) 7%, #080a12);
   --bg-soft: #111521;
@@ -77,6 +79,39 @@ a:hover {
 :focus-visible {
   outline: 3px solid var(--ink-cyan);
   outline-offset: 2px;
+}
+
+/* Skip past the header: off-screen until focused, then pinned top-left. */
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 100;
+  padding: 0.6rem 1rem;
+  color: var(--accent-text);
+  background: var(--theme-1);
+  border-radius: var(--radius);
+  font-weight: 800;
+  transform: translateY(-200%);
+  transition: transform 0.16s ease;
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+/* Kill the 300ms double-tap wait on touch targets. */
+a,
+button,
+input:not([type='range']),
+select {
+  touch-action: manipulation;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
 }
 
 ::selection {
@@ -601,6 +636,9 @@ a:hover {
 
 .show-item {
   margin: 0;
+  /* Long catalog lists: skip rendering rows that are off-screen. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 4.6rem;
 }
 
 .show {
@@ -1105,6 +1143,9 @@ a:hover {
 
 .picker-item-wrap {
   margin: 0;
+  /* Up to 563 venues render at once; keep off-screen rows out of layout. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 3.5rem;
 }
 
 .picker-item {
@@ -1386,6 +1427,7 @@ a:hover {
   width: min(92vw, 410px);
   padding: calc(1.1rem + env(safe-area-inset-top)) 1rem calc(var(--np-h) + 1.25rem);
   overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--bg-soft);
   border-left: 1px solid var(--line-strong);
   box-shadow: -18px 0 40px rgba(12, 62, 55, 0.18);
@@ -1731,6 +1773,39 @@ a:hover {
   font-size: 0.68rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Gapless handoff status: "buffering" while the next track loads, then "ready". */
+.np-preload {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  overflow: hidden;
+  color: var(--ink-yellow);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* An author display value would otherwise beat the UA rule for [hidden]. */
+.np-preload[hidden] {
+  display: none;
+}
+
+.np-preload::before {
+  content: '';
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.np-preload[data-state='ready'] {
+  color: var(--ink-aqua);
 }
 
 .np-controls {

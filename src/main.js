@@ -6,7 +6,15 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { fetchCatalog, fetchShowTracks, fetchSongbook, fetchSongShows } from './api.js';
 import { createPlayer } from './player.js';
-import { DEFAULT_THEME_ID, THEMES, chooseAccentText, getTheme, themeActionColor } from './themes.js';
+import {
+  DEFAULT_THEME_ID,
+  THEMES,
+  chooseAccentText,
+  getTheme,
+  themeActionColor,
+  themeBackground,
+  themeInks,
+} from './themes.js';
 import {
   addRecentShow,
   clearAllData,
@@ -21,7 +29,10 @@ import {
 
 const PAGE_SIZE = 40;
 const MIN_SEARCH_LENGTH = 3;
-const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const MONTH_ABBR = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' });
+/** Uppercased month name for an ISO month number (1-12), formatted by Intl. */
+const monthAbbr = (month) =>
+  MONTH_ABBR.format(new Date(Date.UTC(2000, month - 1, 1))).toUpperCase();
 const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 const PAUSE_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
@@ -82,6 +93,7 @@ const els = {
   trackSkeleton: el('track-skeleton'),
   npTrack: el('np-track'),
   npShow: el('np-show'),
+  npPreload: el('np-preload'),
   npToggle: el('np-toggle'),
   npPrev: el('np-prev'),
   npNext: el('np-next'),
@@ -96,6 +108,8 @@ const els = {
   npSonosRefresh: el('np-sonos-refresh'),
   npOutputStatus: el('np-output-status'),
 };
+
+const themeColorMeta = document.querySelector('meta[name="theme-color"]');
 
 const state = {
   shows: [],
@@ -476,7 +490,7 @@ function formatLongDate(iso) {
 function formatShortDate(iso) {
   const parts = isoParts(iso);
   if (!parts) return '';
-  return `${MONTHS[parts.month - 1]} ${parts.day}, ${parts.year}`;
+  return `${monthAbbr(parts.month)} ${parts.day}, ${parts.year}`;
 }
 
 function formatClock(seconds) {
@@ -518,7 +532,7 @@ const DIMENSIONS = {
   venue: {
     singular: 'Venue',
     plural: 'Venues',
-    placeholder: 'Filter venues',
+    placeholder: 'Filter venues…',
     where: 'at',
     pick: (show) => show.venue,
     unknown: 'Unknown venue',
@@ -526,7 +540,7 @@ const DIMENSIONS = {
   year: {
     singular: 'Year',
     plural: 'Years',
-    placeholder: 'Filter years',
+    placeholder: 'Filter years…',
     where: 'from',
     pick: (show) => isoParts(show.date)?.year ?? '',
     unknown: 'Unknown year',
@@ -534,7 +548,7 @@ const DIMENSIONS = {
   history: {
     singular: 'This Day in History',
     plural: 'This Day in History',
-    placeholder: 'Filter these shows',
+    placeholder: 'Filter these shows…',
     where: 'on',
   },
 };
@@ -1165,7 +1179,92 @@ function rememberShow(show) {
   if (currentView() === 'root') renderRecent(true);
 }
 
-function render() {
+let pendingSongKey = null;
+let urlRestored = false;
+
+/**
+ * Keep the browse state in the URL so a view can be linked, reloaded, or shared.
+ * replaceState (not pushState) keeps the back button out of filter changes.
+ */
+function syncUrl() {
+  // Never overwrite an incoming link before restoreFromUrl has read it.
+  if (!urlRestored) return;
+
+  const params = new URLSearchParams();
+  if (state.dimension) params.set('browse', state.dimension);
+
+  if (state.dimension === 'city') {
+    if (state.city.country) params.set('country', state.city.country);
+    if (state.city.region) params.set('region', state.city.region);
+    if (state.city.city) params.set('city', state.city.city);
+  } else if (state.dimension === 'song') {
+    if (state.song.selectedKey) params.set('song', state.song.selectedKey);
+  } else if (state.value) {
+    params.set('group', state.value);
+  }
+
+  const query = state.searchRaw.trim();
+  if (query) params.set('q', query);
+
+  const search = params.toString();
+  const next = search ? `${location.pathname}?${search}` : location.pathname;
+  if (next !== `${location.pathname}${location.search}`) {
+    history.replaceState(null, '', next);
+  }
+}
+
+/** Apply a linked view once the catalog is in memory. */
+function restoreFromUrl() {
+  if (urlRestored) return;
+  urlRestored = true;
+
+  const params = new URLSearchParams(location.search);
+  const browse = params.get('browse');
+  if (!browse) return;
+  if (browse !== 'city' && browse !== 'song' && !DIMENSIONS[browse]) return;
+
+  const applyQuery = () => {
+    const query = (params.get('q') ?? '').trim();
+    if (!query) return;
+    els.search.value = query;
+    state.searchRaw = query;
+    state.query = normalizeSearch(query);
+    els.searchClear.hidden = false;
+  };
+
+  if (browse === 'city') {
+    setDimension('city', { reveal: false });
+    state.city = {
+      country: params.get('country'),
+      region: params.get('region'),
+      city: params.get('city'),
+    };
+    applyQuery();
+    render();
+    return;
+  }
+
+  if (browse === 'song') {
+    pendingSongKey = params.get('song');
+    setDimension('song', { reveal: false });
+    applyQuery();
+    if (state.song.loaded && pendingSongKey) {
+      const key = pendingSongKey;
+      pendingSongKey = null;
+      selectSong(key);
+    }
+    render();
+    return;
+  }
+
+  setDimension(browse, { reveal: false });
+  const group = params.get('group');
+  if (group) state.value = group;
+  applyQuery();
+  render();
+}
+
+function renderView() {
   const view = currentView();
   const isCity = state.dimension === 'city';
   const isSong = state.dimension === 'song';
@@ -1231,9 +1330,15 @@ function render() {
   els.drillBack.setAttribute('aria-label', `Back to ${backLabel.toLowerCase()}`);
   els.drillKicker.textContent = config.singular;
   els.drillTitle.textContent = group.label;
-  els.search.placeholder = 'Filter these shows';
+  els.search.placeholder = 'Filter these shows…';
   renderShows(group, config);
   appendSearchHint();
+}
+
+/** Every render reflects the current view into the URL. */
+function render() {
+  renderView();
+  syncUrl();
 }
 
 function updateRootChrome() {
@@ -1342,7 +1447,7 @@ function renderCity(view) {
       'Back to cities',
       [country?.label, region?.label].filter(Boolean).join(' · '),
       city.label,
-      'Filter these shows',
+      'Filter these shows…',
     );
     renderShows(city, { where: 'in' });
     return;
@@ -1351,7 +1456,7 @@ function renderCity(view) {
   const level = cityLevel();
 
   if (level === 'country') {
-    setDrill('All filters', 'Back to all filters', 'Browse by', 'Countries', 'Filter countries');
+    setDrill('All filters', 'Back to all filters', 'Browse by', 'Countries', 'Filter countries…');
     renderCityPicker(cityCountries, 'Country', 'Countries');
     return;
   }
@@ -1369,7 +1474,7 @@ function renderCity(view) {
       'Back to countries',
       'Country',
       country.label,
-      'Filter states & provinces',
+      'Filter states & provinces…',
     );
     renderCityPicker([...country.regions.values()], 'State / Province', 'States & provinces');
     return;
@@ -1383,7 +1488,7 @@ function renderCity(view) {
     `Back to ${region ? 'states & provinces' : 'countries'}`,
     context,
     'Cities',
-    'Filter cities',
+    'Filter cities…',
   );
   renderCityPicker(nodes, 'City', 'Cities');
 }
@@ -1423,7 +1528,15 @@ function loadSongs({ force = false } = {}) {
     })
     .finally(() => {
       state.song.loading = false;
-      if (state.dimension === 'song') render();
+      if (state.dimension === 'song') {
+        // A linked view waits for the songbook before selecting its song.
+        if (pendingSongKey) {
+          const key = pendingSongKey;
+          pendingSongKey = null;
+          selectSong(key);
+        }
+        render();
+      }
     });
 }
 
@@ -1512,13 +1625,13 @@ function renderSong(view) {
       'Back to songs',
       'Song',
       state.song.selectedName || 'Song',
-      'Filter these shows',
+      'Filter these shows…',
     );
     renderSongShows();
     return;
   }
 
-  setDrill('All filters', 'Back to all filters', 'Browse by', 'Songs', 'Filter songs');
+  setDrill('All filters', 'Back to all filters', 'Browse by', 'Songs', 'Filter songs…');
   renderSongPicker();
 }
 
@@ -1689,7 +1802,7 @@ function createShowItem(show) {
   date.className = 'show-date';
   const month = document.createElement('span');
   month.className = 'show-month';
-  month.textContent = parts ? MONTHS[parts.month - 1] : '—';
+  month.textContent = parts ? monthAbbr(parts.month) : '—';
   const day = document.createElement('span');
   day.className = 'show-day';
   day.textContent = parts ? String(parts.day).padStart(2, '0') : '··';
@@ -1772,6 +1885,7 @@ async function loadCatalog() {
     state.loading = false;
     els.listSkeleton.hidden = true;
     render();
+    if (state.shows.length) restoreFromUrl();
     if (state.shows.length) restoreSession();
   }
 }
@@ -1836,7 +1950,7 @@ function resetTrackSearch() {
   els.trackSearchClear.hidden = true;
 }
 
-function setDimension(dimension) {
+function setDimension(dimension, { reveal = true } = {}) {
   if (dimension !== 'city' && dimension !== 'song' && !DIMENSIONS[dimension]) return;
   songShowsController?.abort();
   clearListError();
@@ -1863,7 +1977,7 @@ function setDimension(dimension) {
   resetSearch();
   if (dimension === 'song') loadSongs();
   render();
-  revealDrillTop();
+  if (reveal) revealDrillTop();
 }
 
 function selectGroup(key) {
@@ -2223,6 +2337,28 @@ function updateProgress(snapshot) {
   setRangeFill(els.npSeek);
 }
 
+/**
+ * Show the gapless handoff in the transport: the next track is fetched in the last
+ * 30 seconds of the current one, so surface that it is buffering, then ready.
+ */
+let preloadLabel = null;
+
+function renderPreload(snapshot) {
+  const preload = snapshot.preload;
+  const label = !preload
+    ? ''
+    : preload.ready
+      ? 'Next track ready'
+      : 'Buffering next…';
+  if (label === preloadLabel) return;
+  preloadLabel = label;
+
+  els.npPreload.hidden = !label;
+  els.npPreload.textContent = label;
+  if (label) els.npPreload.dataset.state = preload.ready ? 'ready' : 'buffering';
+  else delete els.npPreload.dataset.state;
+}
+
 function renderTransport(snapshot) {
   const hasTrack = Boolean(snapshot.track);
   document.querySelector('.np-label').textContent = output.mode === 'sonos'
@@ -2241,6 +2377,7 @@ function renderTransport(snapshot) {
   els.npToggle.innerHTML = snapshot.playing ? PAUSE_ICON : PLAY_ICON;
   els.npToggle.setAttribute('aria-label', snapshot.playing ? 'Pause' : 'Play');
   document.body.classList.toggle('is-playing', snapshot.playing);
+  renderPreload(snapshot);
   updateProgress(snapshot);
 }
 
@@ -2263,8 +2400,14 @@ player.on((type, snapshot) => {
     return;
   }
   if (type === 'time') {
+    // Priming happens on the same tick as a time update, so refresh the label here.
+    renderPreload(snapshot);
     updateProgress(snapshot);
     saveCurrentSession(snapshot);
+    return;
+  }
+  if (type === 'preload') {
+    renderPreload(snapshot);
     return;
   }
   if (type === 'playpause') {
@@ -2471,9 +2614,16 @@ function applyTheme(id, { persist = false, rerender = false } = {}) {
   theme.colors.forEach((color, index) => {
     root.style.setProperty(`--theme-${index + 1}`, color);
   });
+  // Text inks are the palette colors lifted to a readable lightness; the raw colors
+  // stay untouched for fills, borders, and gradients.
+  themeInks(theme.colors).forEach((ink, index) => {
+    root.style.setProperty(`--theme-${index + 1}-ink`, ink);
+  });
   root.style.setProperty('--theme-action', themeActionColor(theme.colors));
   root.style.setProperty('--accent-text', chooseAccentText(theme.colors));
   root.dataset.theme = theme.id;
+  // Keep browser/OS chrome on the theme background instead of a static guess.
+  themeColorMeta?.setAttribute('content', themeBackground(theme.colors));
 
   syncThemeControls();
   if (persist) saveSettings({ theme: theme.id });
