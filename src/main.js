@@ -5,6 +5,16 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { fetchCatalog, fetchShowTracks, fetchSongbook, fetchSongShows } from './api.js';
+import {
+  cacheShow,
+  clearAllOffline,
+  isSupported as offlineSupported,
+  listCachedShowIds,
+  releaseAllUrls,
+  releaseShowUrls,
+  removeCachedShow,
+  resolveTracks as resolveOfflineTracks,
+} from './offline.js';
 import { createPlayer } from './player.js';
 import {
   DEFAULT_THEME_ID,
@@ -19,13 +29,18 @@ import {
 import {
   addRecentShow,
   clearAllData,
+  clearFavorites,
   clearRecentShows,
   clearSession,
+  loadFavorites,
   loadRecentShows,
   loadSession,
   loadSettings,
+  removeFavorite,
+  saveFavorite,
   saveSession,
   saveSettings,
+  updateFavoriteCache,
 } from './storage.js';
 
 const PAGE_SIZE = 40;
@@ -40,6 +55,8 @@ const PAUSE_ICON =
 /** Show rows open the setlist, so the row badge is a disclosure chevron, not a play glyph. */
 const TRACKLIST_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const STAR_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>';
 
 const el = (id) => document.getElementById(id);
 const els = {
@@ -69,6 +86,8 @@ const els = {
   resetStatus: el('reset-status'),
   catalogChoices: el('catalog-choices'),
   choiceButtons: [...document.querySelectorAll('[data-dimension]')],
+  favoritesOpen: el('favorites-open'),
+  favoritesCount: el('favorites-count'),
   recent: el('recent'),
   recentList: el('recent-list'),
   recentClear: el('recent-clear'),
@@ -86,6 +105,8 @@ const els = {
   panelTitle: el('panel-title'),
   panelVenue: el('panel-venue'),
   panelPlay: el('panel-play'),
+  panelFavorite: el('panel-favorite'),
+  panelOffline: el('panel-offline'),
   panelLink: el('panel-link'),
   panelNote: el('panel-note'),
   panelClose: el('panel-close'),
@@ -113,6 +134,12 @@ const els = {
   npOutputStatus: el('np-output-status'),
 };
 
+document.getElementById('sidebar-nav').append(els.catalogChoices);
+document.getElementById('sidebar-recent').append(els.recent);
+
+document.getElementById('sidebar-nav').append(els.catalogChoices);
+document.getElementById('sidebar-recent').append(els.recent);
+
 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
 
 const state = {
@@ -127,6 +154,7 @@ const state = {
   trackSearchRaw: '',
   dimension: null,
   value: null,
+  favoritesOpen: false,
   city: { country: null, region: null, city: null },
   song: {
     list: [],
@@ -165,6 +193,11 @@ let panelRequest = null;
 let restoreEpoch = 0;
 let seeking = false;
 let recentShows = loadRecentShows();
+let favorites = loadFavorites();
+/** showId -> AbortController for an in-flight offline download. */
+const favoriteJobs = new Map();
+/** Favorites removed while their blob URLs are still loaded in the player. */
+const pendingUrlReleases = new Set();
 let sessionRestored = false;
 let sessionSavedAt = 0;
 let settingsSavedAt = 0;
@@ -310,11 +343,17 @@ async function playOnSonos(show, tracks, index, resumeAt = 0) {
     setOutputStatus('Choose a Sonos room first.', true);
     return;
   }
-  const track = tracks[index];
+  // A cached track carries a blob URL that exists only on this device, so the
+  // speakers always get the Archive.org stream instead.
+  const remoteTracks = tracks.map((entry) =>
+    entry.remoteUrl ? { ...entry, url: entry.remoteUrl } : entry,
+  );
+  const track = remoteTracks[index];
   if (!track || track.unavailable) return;
+  const playingCachedCopy = tracks.some((entry) => entry.offline);
   const browserState = player.snapshot();
   if (browserState.playing) player.toggle();
-  output.sonos = { queue: tracks, index, context: show, playing: true, sawPlaying: false, currentTime: resumeAt, duration: track.duration || 0, volume: output.sonos.volume };
+  output.sonos = { queue: remoteTracks, index, context: show, playing: true, sawPlaying: false, currentTime: resumeAt, duration: track.duration || 0, volume: output.sonos.volume };
   output.selectionLocked = true;
   renderRoomChoices();
   els.npOutputMode.value = 'sonos';
@@ -331,7 +370,11 @@ async function playOnSonos(show, tracks, index, resumeAt = 0) {
     }
     await invoke('sonos_play', { playerId: output.roomId, url: track.url, title: track.title });
     if (resumeAt > 0) await sonosControl('seek', resumeAt);
-    setOutputStatus(selectedRoomNames().join(' + ') || 'Sonos connected');
+    setOutputStatus(
+      playingCachedCopy
+        ? `${selectedRoomNames().join(' + ') || 'Sonos'} · playing the Archive.org stream`
+        : selectedRoomNames().join(' + ') || 'Sonos connected',
+    );
     rememberShow(show);
   } catch (error) {
     output.sonos.playing = false;
@@ -1120,6 +1163,7 @@ function filteredGroups(dimension) {
 }
 
 function currentView() {
+  if (state.favoritesOpen && !state.dimension) return 'favorites';
   if (!state.dimension) return 'root';
   if (state.dimension === 'city') return cityLevel() === 'shows' ? 'shows' : 'picker';
   if (state.dimension === 'song') return state.song.selectedKey ? 'shows' : 'picker';
@@ -1195,7 +1239,11 @@ function syncUrl() {
   if (!urlRestored) return;
 
   const params = new URLSearchParams();
-  if (state.dimension) params.set('browse', state.dimension);
+  if (state.favoritesOpen && !state.dimension) {
+    params.set('favorites', '1');
+  } else if (state.dimension) {
+    params.set('browse', state.dimension);
+  }
 
   if (state.dimension === 'city') {
     if (state.city.country) params.set('country', state.city.country);
@@ -1223,6 +1271,12 @@ function restoreFromUrl() {
   urlRestored = true;
 
   const params = new URLSearchParams(location.search);
+  if (params.get('favorites') === '1') {
+    state.favoritesOpen = true;
+    render();
+    return;
+  }
+
   const browse = params.get('browse');
   if (!browse) return;
   if (browse !== 'city' && browse !== 'song' && !DIMENSIONS[browse]) return;
@@ -1268,8 +1322,18 @@ function restoreFromUrl() {
   render();
 }
 
+/** An offline reload has no catalog, but a linked favorites view still has to open. */
+function restoreFavoritesFromUrl() {
+  if (urlRestored) return;
+  if (new URLSearchParams(location.search).get('favorites') !== '1') return;
+  urlRestored = true;
+  state.favoritesOpen = true;
+  render();
+}
+
 function renderView() {
   const view = currentView();
+  const isFavorites = view === 'favorites';
   const isCity = state.dimension === 'city';
   const isSong = state.dimension === 'song';
   const config = state.dimension && !isCity && !isSong ? DIMENSIONS[state.dimension] : null;
@@ -1290,19 +1354,33 @@ function renderView() {
   }
 
   els.drillBar.hidden = view === 'root';
-  els.searchWrap.hidden = view === 'root';
+  els.searchWrap.hidden = view === 'root' || isFavorites;
   els.pickerList.hidden = view !== 'picker';
-  els.showList.hidden = view !== 'shows';
-  els.loadMoreWrap.hidden = view !== 'shows';
+  els.showList.hidden = view !== 'shows' && view !== 'root' && !isFavorites;
+  els.loadMoreWrap.hidden = isFavorites || (view !== 'shows' && view !== 'root');
   els.searchClear.hidden = !state.searchRaw;
 
   updateCatalogCount();
   renderRecent(view === 'root');
+  renderFavoritesNav();
+
+  if (isFavorites) {
+    els.drillBack.textContent = '\u2190 All filters';
+    els.drillBack.setAttribute('aria-label', 'Back to all filters');
+    els.drillKicker.textContent = 'Your collection';
+    els.drillTitle.textContent = 'Favorites';
+    renderFavorites();
+    return;
+  }
 
   if (view === 'root') {
-    els.showList.replaceChildren();
     els.pickerList.replaceChildren();
-    updateRootChrome();
+    if (state.shows.length) {
+      renderShows({ label: 'the vault', shows: state.shows }, { where: 'in' });
+    } else {
+      els.showList.replaceChildren();
+      updateRootChrome();
+    }
     return;
   }
 
@@ -1832,6 +1910,7 @@ function createShowItem(show) {
   meta.className = 'show-meta';
   if (show.coverage) {
     const place = document.createElement('span');
+    place.className = 'show-place';
     place.textContent = show.coverage;
     meta.append(place);
   }
@@ -1840,6 +1919,14 @@ function createShowItem(show) {
     tag.className = `source-tag source-${show.source.toLowerCase()}`;
     tag.textContent = show.source;
     meta.append(tag);
+  }
+  // Only favorited shows carry a cache record, so this badge stays off the catalog.
+  const cacheLabel = favoriteCacheLabel(show);
+  if (cacheLabel) {
+    const offlineTag = document.createElement('span');
+    offlineTag.className = 'show-offline';
+    offlineTag.textContent = cacheLabel;
+    meta.append(offlineTag);
   }
   body.append(title, meta);
 
@@ -1862,7 +1949,17 @@ function createShowItem(show) {
       show.coverage ? `, ${show.coverage}` : ''
     }`,
   );
-  item.append(button);
+
+  // The star is a sibling of the row button: nesting a button inside a button is
+  // invalid markup and breaks keyboard activation.
+  const favorite = document.createElement('button');
+  favorite.type = 'button';
+  favorite.className = 'show-fav';
+  favorite.dataset.favId = show.id;
+  favorite.innerHTML = STAR_ICON;
+  syncFavoriteButton(favorite, show);
+
+  item.append(button, favorite);
   return item;
 }
 
@@ -1870,6 +1967,320 @@ function createShowItem(show) {
 function showListError(message) {
   els.listAlert.hidden = !message;
   els.listAlertMsg.textContent = message ?? '';
+}
+
+/* -------------------------------------------------------------- favorites */
+
+function isFavorite(id) {
+  return favorites.some((entry) => entry.id === id);
+}
+
+/** Catalog first, then a saved favorite, so favorites outlive a failed catalog. */
+function findShow(id) {
+  if (!id) return null;
+  return state.shows.find((show) => show.id === id) ?? favorites.find((entry) => entry.id === id) ?? null;
+}
+
+function favoriteCacheLabel(show) {
+  if (show?.id && favoriteJobs.has(show.id)) return 'Saving offline…';
+  const cache = show?.cache;
+  if (!cache) return '';
+  if (cache.state === 'saved') {
+    return `Saved offline${cache.tracks ? ` · ${cache.tracks} tracks` : ''}`;
+  }
+  if (cache.state === 'partial') return `Partly saved · ${cache.tracks} tracks`;
+  return 'Not saved offline';
+}
+
+function renderFavoritesNav() {
+  els.favoritesCount.textContent = String(favorites.length);
+  els.favoritesCount.hidden = !favorites.length;
+  const active = state.favoritesOpen && !state.dimension;
+  els.favoritesOpen.classList.toggle('is-active', active);
+  els.favoritesOpen.setAttribute('aria-pressed', String(active));
+}
+
+function renderFavorites() {
+  const fragment = document.createDocumentFragment();
+
+  if (!favorites.length) {
+    const empty = document.createElement('li');
+    empty.className = 'empty-state';
+    empty.textContent =
+      'No favorites yet. Star a show to keep it here and save it for offline listening.';
+    fragment.append(empty);
+  } else {
+    for (const favorite of favorites) fragment.append(createShowItem(favorite));
+  }
+
+  els.showList.replaceChildren(fragment);
+  els.loadMore.hidden = true;
+  els.listEnd.hidden = true;
+
+  if (!favorites.length) {
+    els.listStatus.textContent = 'Favorites are saved on this device.';
+    return;
+  }
+
+  const saved = favorites.filter((entry) => entry.cache?.state === 'saved').length;
+  const unavailable = offlineSupported() ? '' : ' · offline copies unavailable on this device';
+  els.listStatus.textContent = `${formatCount(favorites.length)} favorite${
+    favorites.length === 1 ? '' : 's'
+  } · ${formatCount(saved)} saved offline${unavailable}`;
+}
+
+function syncFavoriteButton(button, show) {
+  const favorited = isFavorite(show.id);
+  const title = show.title || 'this show';
+  button.classList.toggle('is-active', favorited);
+  button.setAttribute('aria-pressed', String(favorited));
+  button.setAttribute(
+    'aria-label',
+    favorited ? `Remove ${title} from favorites` : `Add ${title} to favorites`,
+  );
+  button.title = favorited ? 'Remove from favorites' : 'Add to favorites';
+}
+
+function syncPanelFavorite() {
+  const show = state.show;
+  const favorited = Boolean(show?.id) && isFavorite(show.id);
+  els.panelFavorite.disabled = !show?.id;
+  els.panelFavorite.classList.toggle('is-active', favorited);
+  els.panelFavorite.setAttribute('aria-pressed', String(favorited));
+  els.panelFavorite.setAttribute(
+    'aria-label',
+    favorited
+      ? `Remove ${show?.title ?? 'this show'} from favorites`
+      : `Add ${show?.title ?? 'this show'} to favorites`,
+  );
+  const label = els.panelFavorite.querySelector('.panel-favorite-label');
+  if (label) label.textContent = favorited ? 'Favorited' : 'Favorite';
+}
+
+function renderPanelOffline() {
+  const showId = state.show?.id;
+  const favorite = showId ? favorites.find((entry) => entry.id === showId) : null;
+  const message = favorite ? favoriteCacheLabel(favorite) : '';
+
+  els.panelOffline.textContent = message;
+  els.panelOffline.hidden = !message;
+}
+
+function syncFavoriteControls() {
+  renderFavoritesNav();
+  for (const button of els.showList.querySelectorAll('.show-fav')) {
+    const show = findShow(button.dataset.favId);
+    if (show) syncFavoriteButton(button, show);
+  }
+  syncPanelFavorite();
+  renderPanelOffline();
+}
+
+/** Route a favorite message to the panel when it shows that concert, else the list. */
+function reportFavoriteMessage(showId, message, isError = false) {
+  if (state.show?.id === showId) setPanelNote(message, isError);
+  else if (isError) showListError(message);
+}
+
+function updateFavoriteCacheState(showId, cache, tracks) {
+  const result = updateFavoriteCache(showId, cache, tracks);
+  favorites = result.favorites;
+  syncFavoriteControls();
+}
+
+/**
+ * Revoking an object URL that the player is still using would cut playback off,
+ * so a show that is loaded right now has its URLs released on the next track.
+ */
+function releaseFavoriteUrls(showId) {
+  if (activeSnapshot().context?.id === showId) {
+    pendingUrlReleases.add(showId);
+    return;
+  }
+  releaseShowUrls(showId);
+}
+
+function flushPendingReleases() {
+  if (!pendingUrlReleases.size) return;
+  const activeId = activeSnapshot().context?.id;
+  for (const showId of [...pendingUrlReleases]) {
+    if (showId === activeId) continue;
+    pendingUrlReleases.delete(showId);
+    releaseShowUrls(showId);
+  }
+}
+
+async function startFavoriteCache(showId) {
+  if (!offlineSupported() || favoriteJobs.has(showId) || !isFavorite(showId)) return;
+
+  let tracks = state.show?.id === showId && state.tracks.length ? state.tracks : null;
+  if (!tracks) tracks = favorites.find((entry) => entry.id === showId)?.tracks ?? null;
+  if (!tracks) {
+    try {
+      const result = await fetchShowTracks(showId);
+      tracks = result.tracks;
+    } catch {
+      tracks = null;
+    }
+  }
+
+  if (!tracks?.length) {
+    updateFavoriteCacheState(showId, { state: 'failed', tracks: 0, bytes: 0, savedAt: Date.now() });
+    reportFavoriteMessage(
+      showId,
+      'Saved as a favorite, but the setlist could not be loaded for offline use.',
+      true,
+    );
+    return;
+  }
+
+  const controller = new AbortController();
+  favoriteJobs.set(showId, controller);
+  syncFavoriteControls();
+
+  try {
+    const result = await cacheShow(showId, tracks, {
+      signal: controller.signal,
+      onProgress: (progress) => {
+        if (state.show?.id !== showId) return;
+        setPanelNote(`Saving track ${Math.min(progress.done, progress.total)} of ${progress.total}…`);
+      },
+    });
+
+    updateFavoriteCacheState(
+      showId,
+      { state: result.state, tracks: result.tracks.length, bytes: result.bytes, savedAt: Date.now() },
+      result.tracks,
+    );
+
+    if (result.state === 'saved') {
+      reportFavoriteMessage(showId, `Saved ${result.tracks.length} tracks for offline listening.`);
+    } else {
+      const summary = result.state === 'partial'
+        ? `Saved ${result.tracks.length} of ${tracks.length} tracks.`
+        : 'None of this show could be saved offline.';
+      reportFavoriteMessage(showId, summary, true);
+    }
+  } catch (error) {
+    if (error?.name === 'AbortError') return;
+    updateFavoriteCacheState(showId, { state: 'failed', tracks: 0, bytes: 0, savedAt: Date.now() });
+    reportFavoriteMessage(
+      showId,
+      error?.message ?? 'Could not save this show for offline listening.',
+      true,
+    );
+  } finally {
+    favoriteJobs.delete(showId);
+    syncFavoriteControls();
+    if (state.favoritesOpen) render();
+  }
+}
+
+function addFavoriteShow(show) {
+  const { ok, favorites: next } = saveFavorite(show);
+  favorites = next;
+
+  if (!ok) {
+    reportFavoriteMessage(
+      show.id,
+      'Saved for this session only — this device is blocking storage.',
+      true,
+    );
+  } else if (!offlineSupported()) {
+    reportFavoriteMessage(show.id, 'Saved. Offline copies are unavailable on this device.');
+  } else {
+    reportFavoriteMessage(show.id, 'Saved. Downloading the show for offline listening…');
+  }
+
+  void startFavoriteCache(show.id);
+}
+
+async function unfavoriteShow(id) {
+  const job = favoriteJobs.get(id);
+  if (job) {
+    job.abort();
+    favoriteJobs.delete(id);
+  }
+
+  const { favorites: next } = removeFavorite(id);
+  favorites = next;
+  releaseFavoriteUrls(id);
+  await removeCachedShow(id);
+
+  reportFavoriteMessage(id, 'Removed from Favorites. The offline copy was deleted.');
+  if (state.favoritesOpen) render();
+  else syncFavoriteControls();
+}
+
+async function toggleFavorite(show) {
+  if (!show?.id) return;
+  if (isFavorite(show.id)) await unfavoriteShow(show.id);
+  else addFavoriteShow(show);
+  syncFavoriteControls();
+}
+
+/**
+ * A browser can evict cached audio without telling us. Fold that back into the
+ * stored records at boot so a favorite never claims to be saved when it is not.
+ * The setlist manifest is kept: the show still streams and can be saved again.
+ */
+async function reconcileOfflineCopies() {
+  if (!offlineSupported() || !favorites.some((entry) => entry.cache)) return;
+
+  const cached = new Set(await listCachedShowIds());
+  for (const favorite of favorites) {
+    if (favorite.cache && favorite.cache.state !== 'failed' && !cached.has(favorite.id)) {
+      updateFavoriteCacheState(favorite.id, {
+        state: 'failed',
+        tracks: 0,
+        bytes: 0,
+        savedAt: 0,
+      });
+    }
+  }
+
+  if (state.favoritesOpen) render();
+}
+
+function openFavorites() {
+  clearListError();
+  songShowsController?.abort();
+  state.favoritesOpen = true;
+  state.dimension = null;
+  state.value = null;
+  state.city = { country: null, region: null, city: null };
+  state.visible = PAGE_SIZE;
+  resetSearch();
+  render();
+  revealDrillTop();
+}
+
+/**
+ * Fetch a setlist, falling back to the manifest stored with a favorite. That
+ * fallback is what lets a saved show load with no network at all.
+ */
+async function loadShowTracks(show, { signal } = {}) {
+  try {
+    const { tracks } = await fetchShowTracks(show.id, { signal });
+    return { tracks, offline: false };
+  } catch (error) {
+    if (error?.name === 'AbortError') throw error;
+    const saved = favorites.find((entry) => entry.id === show.id)?.tracks;
+    if (!saved?.length) throw error;
+    return { tracks: saved.map((track) => ({ ...track })), offline: true };
+  }
+}
+
+/**
+ * Give the player the best URLs available: cached audio for a show saved offline,
+ * otherwise the Archive.org stream. Sonos always gets remote URLs because a blob
+ * URL only exists on this device.
+ */
+async function prepareTracks(show, tracks) {
+  if (output.mode === 'sonos') return tracks;
+  if (!show?.id || !tracks?.length || !isFavorite(show.id)) return tracks;
+  const resolved = await resolveOfflineTracks(show.id, tracks);
+  return resolved.tracks;
 }
 
 async function loadCatalog() {
@@ -1896,6 +2307,7 @@ async function loadCatalog() {
     els.listSkeleton.hidden = true;
     render();
     if (state.shows.length) restoreFromUrl();
+    else restoreFavoritesFromUrl();
     if (state.shows.length) restoreSession();
   }
 }
@@ -1907,7 +2319,7 @@ async function restoreSession() {
   const session = loadSession();
   if (!session) return;
 
-  const show = state.shows.find((entry) => entry.id === session.showId);
+  const show = findShow(session.showId);
   if (!show) {
     clearSession();
     return;
@@ -1915,7 +2327,7 @@ async function restoreSession() {
 
   const epoch = restoreEpoch;
   try {
-    const { tracks } = await fetchShowTracks(show.id);
+    const { tracks } = await loadShowTracks(show);
     if (epoch !== restoreEpoch || state.selectedId) return;
 
     let index = tracks.findIndex((track) => track.id === session.trackId);
@@ -1932,7 +2344,7 @@ async function restoreSession() {
     els.panelPlay.disabled = !tracks.length;
     renderTracks();
     els.trackSkeleton.hidden = true;
-    player.restore(show, tracks, index, session.time);
+    player.restore(show, await prepareTracks(show, tracks), index, session.time);
     rememberShow(show);
     setPanelNote('Picked up where you left off.');
   } catch {
@@ -1964,6 +2376,7 @@ function setDimension(dimension, { reveal = true } = {}) {
   if (dimension !== 'city' && dimension !== 'song' && !DIMENSIONS[dimension]) return;
   songShowsController?.abort();
   clearListError();
+  state.favoritesOpen = false;
   state.dimension = dimension;
   state.value = null;
   state.city = { country: null, region: null, city: null };
@@ -2031,6 +2444,13 @@ function revealDrillTop() {
 
 function goBack() {
   clearListError();
+
+  if (state.favoritesOpen) {
+    state.favoritesOpen = false;
+    render();
+    els.favoritesOpen.focus();
+    return;
+  }
 
   if (state.dimension === 'song') {
     songShowsController?.abort();
@@ -2157,10 +2577,12 @@ function populatePanel(show) {
   els.trackList.replaceChildren();
   els.trackSkeleton.hidden = false;
   setPanelNote('');
+  syncPanelFavorite();
+  renderPanelOffline();
 }
 
 async function selectShow(showId) {
-  const show = state.shows.find((entry) => entry.id === showId);
+  const show = findShow(showId);
   if (!show) return;
 
   state.selectedId = showId;
@@ -2180,17 +2602,20 @@ async function selectShow(showId) {
   state.tracksLoading = true;
 
   try {
-    const { tracks } = await fetchShowTracks(show.id, { signal: panelRequest.signal });
+    const { tracks, offline } = await loadShowTracks(show, { signal: panelRequest.signal });
     if (state.selectedId !== showId) return;
 
     state.tracks = tracks;
     els.panelPlay.disabled = !tracks.length;
     renderTracks();
+    if (offline) setPanelNote('Playing the saved copy — Archive.org is unreachable.');
 
     const firstPlayable = tracks.findIndex((track) => !track.unavailable);
     if (firstPlayable >= 0) {
-      if (output.mode === 'sonos') playOnSonos(show, tracks, firstPlayable);
-      else player.playShow(show, tracks, firstPlayable, true);
+      const playable = await prepareTracks(show, tracks);
+      if (state.selectedId !== showId) return;
+      if (output.mode === 'sonos') playOnSonos(show, playable, firstPlayable);
+      else player.playShow(show, playable, firstPlayable, true);
     } else {
       setPanelNote('This recording has no playable tracks.', true);
     }
@@ -2285,7 +2710,7 @@ function renderTracks() {
   els.panel.classList.toggle('is-paused', !current.playing);
 }
 
-function playTrack(index) {
+async function playTrack(index) {
   const track = state.tracks[index];
   if (!track || !state.show) return;
 
@@ -2294,15 +2719,17 @@ function playTrack(index) {
     toggleOutput();
     return;
   }
-  if (output.mode === 'sonos') playOnSonos(state.show, state.tracks, index);
-  else player.playShow(state.show, state.tracks, index, true);
+  const playable = await prepareTracks(state.show, state.tracks);
+  if (output.mode === 'sonos') playOnSonos(state.show, playable, index);
+  else player.playShow(state.show, playable, index, true);
 }
 
-function playShowFromStart() {
+async function playShowFromStart() {
   const first = state.tracks.findIndex((track) => !track.unavailable);
   if (first >= 0 && state.show) {
-    if (output.mode === 'sonos') playOnSonos(state.show, state.tracks, first);
-    else player.playShow(state.show, state.tracks, first, true);
+    const playable = await prepareTracks(state.show, state.tracks);
+    if (output.mode === 'sonos') playOnSonos(state.show, playable, first);
+    else player.playShow(state.show, playable, first, true);
   }
 }
 
@@ -2415,6 +2842,8 @@ function highlightTracks(snapshot) {
 }
 
 player.on((type, snapshot) => {
+  // A favorite removed mid-playback keeps its blob URLs until the player moves on.
+  if (type === 'track') flushPendingReleases();
   if (output.mode === 'sonos') {
     if (type === 'volume') saveSettings({ volume: snapshot.volume });
     return;
@@ -2464,6 +2893,12 @@ player.on((type, snapshot) => {
 /* -------------------------------------------------------------- listeners */
 
 els.showList.addEventListener('click', (event) => {
+  const star = event.target.closest('.show-fav');
+  if (star?.dataset.favId) {
+    const show = findShow(star.dataset.favId);
+    if (show) void toggleFavorite(show);
+    return;
+  }
   const button = event.target.closest('.show');
   if (button?.dataset.id) selectShow(button.dataset.id);
 });
@@ -2484,7 +2919,11 @@ els.pickerList.addEventListener('click', (event) => {
   else if (state.dimension === 'song') selectSong(button.dataset.key);
   else selectGroup(button.dataset.key);
 });
-els.panelPlay.addEventListener('click', playShowFromStart);
+els.favoritesOpen.addEventListener('click', openFavorites);
+els.panelPlay.addEventListener('click', () => void playShowFromStart());
+els.panelFavorite.addEventListener('click', () => {
+  if (state.show) void toggleFavorite(state.show);
+});
 els.panelClose.addEventListener('click', closePanel);
 els.panelBackdrop.addEventListener('click', closePanel);
 els.panelLink.addEventListener('click', (event) => {
@@ -2497,7 +2936,7 @@ els.panelLink.addEventListener('click', (event) => {
 
 els.trackList.addEventListener('click', (event) => {
   const button = event.target.closest('.track-button');
-  if (button) playTrack(Number(button.dataset.index));
+  if (button) void playTrack(Number(button.dataset.index));
 });
 
 els.search.addEventListener('input', () => {
@@ -2758,6 +3197,13 @@ function resetPersistedData() {
   renderTransport(player.snapshot());
   clearPanelSelection();
   clearAllData();
+  favorites = clearFavorites();
+  for (const controller of favoriteJobs.values()) controller.abort();
+  favoriteJobs.clear();
+  pendingUrlReleases.clear();
+  releaseAllUrls();
+  void clearAllOffline();
+  state.favoritesOpen = false;
   recentShows = [];
   sessionRestored = true;
   sessionSavedAt = 0;
@@ -2865,3 +3311,4 @@ for (let i = 0; i < 8; i += 1) {
 setupTauriShell();
 initializeSonos();
 loadCatalog();
+void reconcileOfflineCopies();

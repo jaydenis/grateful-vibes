@@ -118,6 +118,13 @@ A few platform notes:
   six most recently played shows in `localStorage`. A reload or app restart restores the last track
   paused at the saved timestamp, ready to resume. A **Reset data** control in the
   header clears all of it and restores the default theme and volume.
+- Keeps a **Favorites** list, opened from the sidebar. The star on a show row or in
+  its track panel adds the concert; the same star removes it. Favoriting a show also
+  stores its setlist in `localStorage` and downloads the audio into the browser's
+  Cache Storage, one cache per show. A saved show then plays with no network: the
+  setlist comes from the stored manifest and each cached track is played from a
+  blob URL. The favorites view reports how many shows are saved offline, and each
+  row carries its own offline status.
 - Mirrors the open browse view into the URL — the dimension, its group or city
   drill-down, the selected song, and the filter text — so a view can be reloaded or
   shared. Filter changes use `replaceState`, so the back button stays navigation.
@@ -161,9 +168,11 @@ listed once.
   a derivative errors, the track is marked unavailable and playback skips ahead
   (up to five automatic retries in a row) instead of failing silently.
 - **Persistence is local to one browser or app install.** The selected theme,
-  volume, the last track position, and the recently played list live in `localStorage`; clearing site data
-  or app data removes them, and there is no cross-device sync. The header's
-  **Reset data** button clears it from inside the app and restores the default theme.
+  volume, the last track position, the recently played list, and the favorites list
+  live in `localStorage`; offline audio lives in Cache Storage. Clearing site data or
+  app data removes them, and there is no cross-device sync. The header's **Reset
+  data** button clears all of it — including cached audio — and restores the default
+  theme.
 - **Coverage text is inconsistent.** Country/state/city parsing assumes the
   last comma segment is a country or state code and the first is the city, so
   multi-city values and source-text coverage fall under Unknown, and a city and
@@ -181,8 +190,18 @@ listed once.
   and may list dates that are not in this stream-only catalog. The app matches by
   date, so only performances that have a playable vault entry appear in the show
   list; the status line reports how many of Relisten's shows are available.
+- **Offline copies are per favorite, per device.** Cache Storage is best-effort:
+  it may be missing or disabled in some webviews and private windows, it is limited
+  by the browser's storage quota (a full show is roughly 0.5–1.5 GB), and a refused
+  or failed download leaves the favorite in place but streamable only. Downloads run
+  in the foreground while the app is open, with no resume and no background sync.
+  Offline audio is stored unencrypted in the app's cache, yet never leaves the
+  device. Sonos players always fetch the Archive.org stream because a blob URL only
+  exists on this device.
 - **Archive.org availability.** If the API is slow or down the list shows an error
-  with a retry; there is no offline cache.
+  with a retry. A favorited show that finished saving keeps playing offline, and
+  its favorites view still renders from the stored metadata; everything else needs
+  the network.
 - **Native builds are host-specific.** macOS and iOS builds require a Mac; Linux
   bundles require Linux; Android builds require the Android SDK/NDK. The Tauri
   shell adds no native audio service, so background playback is whatever the
@@ -195,5 +214,5 @@ listed once.
   network with UPnP enabled. Archive streams are preflighted from the desktop,
   but an individual speaker may still reject a file or fail to fetch its
   redirected Archive.org URL.
-- Out of scope by design: downloads, accounts, favorites, user playlists, and
-  non-Grateful-Dead content.
+- Out of scope by design: manual downloads beyond the automatic save for a
+  favorite, accounts, user playlists, and non-Grateful-Dead content.

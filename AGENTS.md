@@ -16,7 +16,8 @@ CORS-enabled, keyless APIs.
 | `npm install` | Installs frontend deps. |
 | `npm run dev` | **Bumps the patch version**, then Vite on `http://localhost:5173` (strict port). |
 | `npm run build` | **Bumps the minor version**, then `vite build` into `dist/`. |
-| `npm test` | **Bumps the patch version**, then `vite build`. There is no test suite. |
+| `npm test` | **Bumps the patch version**, then `vite build`. It runs no tests. |
+| `npm run test:unit` | `vitest run` — the real test suite; never bumps the version. |
 | `npm run preview` | Serves `dist/`. |
 | `npm run desktop:dev` | `tauri dev` — native window with Vite hot reload. |
 | `npm run desktop:build` | `tauri build` — installer for the host OS. |
@@ -49,8 +50,9 @@ only, which keep the upstream Tauri template's 2-space indent. `src/lib.rs` and
 `src/sonos.rs` are clean. Do not reformat those two files as a drive-by in an unrelated
 change.
 
-There is no linter, formatter, or test runner configured for the JavaScript. Do not add
-one unless asked.
+There is no linter or formatter configured for the JavaScript. The test suite is
+Vitest + jsdom (`npm run test:unit`, files under `tests/`, config in
+`vite.config.js`). Do not add further tooling unless asked.
 
 ---
 
@@ -61,12 +63,14 @@ index.html            403 lines — the entire markup; element ids are the contr
 src/main.js          2697 lines — all UI state and DOM orchestration
 src/api.js            Archive.org + Relisten fetching and normalization
 src/player.js         the single <audio> element, transport, Media Session
-src/storage.js        versioned localStorage persistence
+src/storage.js        versioned localStorage persistence (settings, session, recents, favorites)
+src/offline.js        Cache Storage copies of favorited shows for offline playback
 src/themes.js         the 26 color palettes
 src/style.css         custom styles and Bootstrap overrides
 src-tauri/src/lib.rs  the seven sonos_* Tauri commands
 src-tauri/src/sonos.rs  UPnP implementation behind them
 src-tauri/src/main.rs   six-line native entry point
+tests/                Vitest suites: favorites store, offline cache, DOM acceptance
 ```
 
 `src/main.js` is divided by banner comments: helpers, show list, city hierarchy,
@@ -90,7 +94,13 @@ code in the matching section rather than appending to the file.
   silently drops it.
 - **`storage.js`** namespaces every key with `grateful-vibes:v1:`. If you change a stored
   shape, bump `VERSION` and migrate; clearing site data otherwise silently resets user
-  state. `clearAllData()` deletes any key starting with `grateful-vibes:`.
+  state. `clearAllData()` deletes any key starting with `grateful-vibes:`; it does not
+  touch Cache Storage, so reset flows must also call `clearAllOffline()` from `offline.js`.
+- **`offline.js`** keeps one Cache Storage cache per favorited show and resolves cached
+  audio to blob object URLs at play time; `main.js` does that swap in `prepareTracks()`,
+  never `player.js`. A blob URL only exists on this device, so Sonos playback maps tracks
+  back to `remoteUrl`. Object URLs are cached per show and released only after the player
+  moves off that show — revoking a URL the active element is using cuts playback off.
 - **`themes.js`** defines each palette as an ordered color array. `applyTheme()` in
   `main.js` maps it to the CSS variables `--theme-1` … `--theme-5`, `--theme-action`,
   and `--accent-text`, plus `document.documentElement.dataset.theme`. New CSS should

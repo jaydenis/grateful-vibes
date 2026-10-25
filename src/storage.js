@@ -10,10 +10,12 @@ const KEYS = {
   settings: `${PREFIX}:settings`,
   session: `${PREFIX}:session`,
   recent: `${PREFIX}:recent`,
+  favorites: `${PREFIX}:favorites`,
 };
 
 const DEFAULT_VOLUME = 0.85;
 const MAX_RECENT = 6;
+const MAX_FAVORITES = 25;
 const SESSION_MAX_AGE = 1000 * 60 * 60 * 24 * 30;
 
 function read(key) {
@@ -139,7 +141,132 @@ export function clearRecentShows() {
   remove(KEYS.recent);
 }
 
-/** Remove every piece of data this app has persisted (settings, session, recents). */
+/**
+ * Favorites keep a small copy of the show's catalog fields plus the setlist that
+ * was saved for offline play, so the favorites view and a saved show still work
+ * when the catalog request fails.
+ */
+function normalizeFavoriteTrack(track) {
+  if (!isRecord(track) || typeof track.id !== 'string' || !track.id) return null;
+  const url = typeof track.url === 'string' ? track.url : '';
+  // A manifest without a stream URL can never be played, even from the cache.
+  if (!/^https?:\/\//i.test(url)) return null;
+  const duration = Number(track.duration);
+  return {
+    id: track.id,
+    url,
+    title: typeof track.title === 'string' ? track.title : 'Untitled track',
+    duration: Number.isFinite(duration) && duration > 0 ? duration : null,
+    number: Number.isInteger(track.number) ? track.number : 0,
+  };
+}
+
+function normalizeFavoriteCache(cache) {
+  if (!isRecord(cache)) return null;
+  const state = ['saved', 'partial', 'failed'].includes(cache.state) ? cache.state : 'failed';
+  return {
+    state,
+    tracks: Math.max(0, Math.round(Number(cache.tracks) || 0)),
+    bytes: Math.max(0, Math.round(Number(cache.bytes) || 0)),
+    savedAt: Number(cache.savedAt) || 0,
+  };
+}
+
+function normalizeFavorite(entry) {
+  if (!isRecord(entry) || typeof entry.id !== 'string' || !entry.id) return null;
+  const tracks = Array.isArray(entry.tracks)
+    ? entry.tracks.map(normalizeFavoriteTrack).filter(Boolean)
+    : [];
+  return {
+    id: entry.id,
+    date: typeof entry.date === 'string' ? entry.date : null,
+    title: typeof entry.title === 'string' ? entry.title : '',
+    venue: typeof entry.venue === 'string' ? entry.venue : '',
+    coverage: typeof entry.coverage === 'string' ? entry.coverage : '',
+    source: typeof entry.source === 'string' ? entry.source : '',
+    detailsUrl:
+      typeof entry.detailsUrl === 'string' && entry.detailsUrl
+        ? entry.detailsUrl
+        : `https://archive.org/details/${encodeURIComponent(entry.id)}`,
+    views: Number(entry.views) || 0,
+    addedAt: Number(entry.addedAt) || 0,
+    cache: normalizeFavoriteCache(entry.cache),
+    tracks: tracks.length ? tracks : null,
+  };
+}
+
+/** Newest favorite first, capped so localStorage stays small. */
+export function loadFavorites() {
+  const data = read(KEYS.favorites);
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .map(normalizeFavorite)
+    .filter(Boolean)
+    .slice(0, MAX_FAVORITES);
+}
+
+/**
+ * Persist a show as a favorite. Returns `{ ok }` because a blocked write (private
+ * browsing, full storage) must be surfaced rather than silently dropped.
+ */
+export function saveFavorite(show) {
+  const id = typeof show?.id === 'string' ? show.id.trim() : '';
+  const current = loadFavorites();
+  if (!id) return { ok: false, favorites: current };
+  if (current.some((entry) => entry.id === id)) return { ok: true, favorites: current };
+
+  const entry = normalizeFavorite({
+    ...show,
+    id,
+    addedAt: Date.now(),
+    cache: null,
+    tracks: null,
+  });
+  const next = [entry, ...current].slice(0, MAX_FAVORITES);
+  return { ok: write(KEYS.favorites, next), favorites: next };
+}
+
+export function removeFavorite(id) {
+  const key = typeof id === 'string' ? id.trim() : '';
+  if (!key) return { ok: false, favorites: loadFavorites(), removed: false };
+
+  const current = loadFavorites();
+  const next = current.filter((entry) => entry.id !== key);
+  if (next.length === current.length) {
+    return { ok: true, favorites: current, removed: false };
+  }
+  return { ok: write(KEYS.favorites, next), favorites: next, removed: true };
+}
+
+/** Record the result of a download without dropping the saved setlist on failure. */
+export function updateFavoriteCache(id, cache, tracks) {
+  const key = typeof id === 'string' ? id.trim() : '';
+  const current = loadFavorites();
+  if (!key) return { ok: false, favorites: current };
+
+  const index = current.findIndex((entry) => entry.id === key);
+  if (index < 0) return { ok: false, favorites: current };
+
+  const savedTracks = Array.isArray(tracks)
+    ? tracks.map(normalizeFavoriteTrack).filter(Boolean)
+    : [];
+  const entry = {
+    ...current[index],
+    cache: normalizeFavoriteCache(cache),
+    tracks: savedTracks.length ? savedTracks : current[index].tracks,
+  };
+  const next = [...current];
+  next[index] = entry;
+  return { ok: write(KEYS.favorites, next), favorites: next };
+}
+
+export function clearFavorites() {
+  remove(KEYS.favorites);
+  return [];
+}
+
+/** Remove every piece of data this app has persisted (settings, session, recents, favorites). */
 export function clearAllData() {
   for (const key of Object.values(KEYS)) remove(key);
 

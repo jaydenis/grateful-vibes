@@ -102,7 +102,8 @@
               </button>
               <div id="reset-menu" class="reset-menu" role="dialog" aria-label="Reset saved data" hidden>
                 <p class="reset-menu-copy">
-                  Clear the saved theme, volume, playback position, and recently played shows?
+                  Clear the saved theme, volume, playback position, recently played shows,
+                  favorites, and their offline copies?
                 </p>
                 <div class="reset-menu-actions">
                   <button id="reset-confirm" class="btn btn-sm btn-gd" type="button">Reset data</button>
@@ -115,20 +116,50 @@
         </div>
       </header>
 
+      <aside class="app-sidebar" aria-label="Browse the vault">
+        <p class="sidebar-label">Explore</p>          <nav id="sidebar-nav" aria-label="Browse by"></nav>
+          <div id="sidebar-favorites" class="sidebar-favorites">
+            <button
+              id="favorites-open"
+              class="favorites-card"
+              type="button"
+              aria-pressed="false"
+              aria-controls="show-list"
+            >
+              <svg class="favorites-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <span class="favorites-label">Favorites</span>
+              <span id="favorites-count" class="favorites-count" hidden>0</span>
+            </button>
+          </div>
+          <div id="sidebar-recent"></div>
+        <p class="sidebar-note">A living archive of the music, night after night.</p>
+      </aside>
+
       <main class="app-main" id="top">
         <section class="hero">
-          <p class="hero-eyebrow">Internet Archive · stream only</p>
-          <h1>The vault is open.</h1>
-          <p class="hero-sub">
-            One recording per night — the most-viewed version of each Grateful Dead concert, streaming straight from the Archive. <br>
-            Pick a night, press play, and let it melt your face.
-          </p>
+          <div class="hero-copy">
+            <p class="hero-eyebrow">Internet Archive <span aria-hidden="true">/</span> live recordings</p>
+            <h1>The Grateful Dead</h1>
+            <p class="hero-sub">Find a night in the vault. Hear the music the way it happened.</p>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <img src="src/assets/gd-logo-01.png" alt="" />
+          </div>
+          <span class="hero-caption">The live vault <span aria-hidden="true">·</span> stream only</span>
         </section>
 
         <div class="layout">
           <section class="catalog" aria-labelledby="catalog-heading">
             <div class="catalog-toolbar">
-              <h2 id="catalog-heading" class="section-title">Browse shows</h2>
+              <h2 id="catalog-heading" class="section-title">Latest in the vault</h2>
               <div id="search-wrap" class="search-wrap">
                 <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8" />
@@ -332,6 +363,24 @@
                 <p id="panel-venue" class="panel-venue"></p>
                 <div class="panel-actions">
                   <button id="panel-play" class="btn btn-gd" type="button">Play show</button>
+                  <button
+                    id="panel-favorite"
+                    class="btn btn-outline-gd panel-favorite"
+                    type="button"
+                    aria-pressed="false"
+                    disabled
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.8l5.9-.9z"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.7"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                    <span class="panel-favorite-label">Favorite</span>
+                  </button>
                   <a
                     id="panel-link"
                     class="btn btn-outline-gd"
@@ -341,6 +390,7 @@
                     >On Archive.org &nearr;</a
                   >
                 </div>
+                <p id="panel-offline" class="panel-offline" role="status" aria-live="polite" hidden></p>
                 <p id="panel-note" class="panel-note" role="status" aria-live="polite"></p>
               </div>
 
