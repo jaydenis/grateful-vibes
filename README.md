@@ -107,8 +107,9 @@ A few platform notes:
   characters are typed, while keeping the original track numbers and order.
 - Streams with play/pause, next/previous, seek, volume, and OS media-key integration
   (Media Session API). With under 30 seconds left on a track, the next one is buffered
-  into a second hidden `<audio>` element and takes over the moment the current one ends,
-  so consecutive tracks from a concert run together instead of pausing to reconnect.
+  into a second hidden `<audio>` element; in the final two seconds the two overlap in an
+  equal-power crossfade, so consecutive tracks from a concert run together with no gap
+  and no cut. Skipping, seeking, or pausing cancels the fade and acts immediately.
 - On desktop, can optionally route playback to one or two discovered Sonos rooms
   over the local network. Two selected rooms join a Sonos group so they play in
   sync. The browser player remains the default output; room selection locks while

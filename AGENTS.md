@@ -79,9 +79,11 @@ code in the matching section rather than appending to the file.
   and `fetchShowTracks`. All fetch calls take `{ signal }`; keep new requests abortable.
 - **`player.js`** keeps exactly one *active* `<audio>` element, plus a second one that
   is only created to buffer the next track once 30 seconds remain on the current one.
-  On `ended` the buffered element is promoted instead of reloading `src`. Playback
-  state is always read from the active element through `snapshot()`; never cache a
-  reference to an element across a track change.
+  With two seconds left the buffered element starts under the current one and the two
+  crossfade, so the buffered element is promoted as the fade completes (or on `ended`
+  when no fade ran) instead of reloading `src`. Playback state is always read from the
+  active element through `snapshot()`, which reports the user's volume rather than the
+  element's fading gain; never cache a reference to an element across a track change.
 - **`main.js` mirrors browse state into the URL.** `render()` is a thin wrapper over
   `renderView()` that also calls `syncUrl()`; `restoreFromUrl()` reapplies a link once
   the catalog is loaded. New browse state needs a param in both, or a shared link
