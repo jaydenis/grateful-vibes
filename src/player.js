@@ -2,18 +2,25 @@
  * Thin, framework-free wrapper around the audio elements.
  * One element is active at a time and is the only source of truth for playback
  * state; a second, hidden element buffers the next track in the last stretch of
- * the current one so a live show's tracks run together without a network gap.
+ * the current one so a live show's tracks run together without a network gap, and
+ * the two crossfade over the final two seconds so there is no audible hole either.
  */
 const PRELOAD_WINDOW = 30; // seconds of lead time before the next track is fetched
+const CROSSFADE_SECONDS = 2; // overlap between the tail of one track and the next
+const FADE_TICK_MS = 40; // ~25 gain steps a second: smooth, without a frame timer
 
 export function createPlayer() {
   const listeners = new Set();
   const elements = [];
 
+  // The user's volume, kept apart from the elements' own levels so a fade can dim
+  // them without the transport slider appearing to move.
+  let volumeLevel = 0.85;
+
   function makeElement() {
     const audio = new Audio();
     audio.preload = 'auto';
-    audio.volume = 0.85;
+    audio.volume = volumeLevel;
     wire(audio);
     elements.push(audio);
     return audio;
@@ -23,6 +30,7 @@ export function createPlayer() {
   let spare = null;
   let preload = null; // { url, index } for whatever the spare is buffering
   let preloadReady = false; // true once the spare has enough data to start at once
+  let fade = null; // { out, in, startedAt, timer } while the two tracks overlap
   let queue = [];
   let index = -1;
   let context = null;
@@ -41,7 +49,7 @@ export function createPlayer() {
       duration: Number.isFinite(active.duration) && active.duration > 0
         ? active.duration
         : queue[index]?.duration ?? 0,
-      volume: active.volume,
+      volume: volumeLevel,
       hasNext: index >= 0 && index + 1 < queue.length,
       hasPrev: index > 0,
       // Surfaced so the transport can show that the next track is ready to roll.
@@ -92,6 +100,73 @@ export function createPlayer() {
       : queue[index]?.duration ?? 0;
     if (!duration) return null;
     return duration - (active.currentTime || 0);
+  }
+
+  function clampVolume(value) {
+    return Math.min(Math.max(value, 0), 1);
+  }
+
+  /**
+   * Equal-power gains across the overlap. A linear ramp dips about 6 dB halfway
+   * through and reads as a hole in the music; cos/sin keeps the level even.
+   */
+  function applyFadeGains() {
+    const progress = Math.min((performance.now() - fade.startedAt) / (CROSSFADE_SECONDS * 1000), 1);
+    fade.out.volume = clampVolume(volumeLevel * Math.cos((progress * Math.PI) / 2));
+    fade.in.volume = clampVolume(volumeLevel * Math.sin((progress * Math.PI) / 2));
+    return progress;
+  }
+
+  /** Stop the overlap and hand both elements back to the user's volume. */
+  function cancelCrossfade({ pauseIncoming = true } = {}) {
+    if (!fade) return;
+    const { in: incoming, out: outgoing } = fade;
+    clearInterval(fade.timer);
+    fade = null;
+    if (pauseIncoming) {
+      incoming.pause();
+      // The buffered track keeps its data, but it must not resume mid-way next time.
+      try {
+        incoming.currentTime = 0;
+      } catch {
+        /* Before metadata loads there is nothing to rewind; playback starts at 0. */
+      }
+    }
+    incoming.volume = volumeLevel;
+    outgoing.volume = volumeLevel;
+  }
+
+  /**
+   * Bring the next track in under the tail of the current one, two seconds before
+   * it ends. Only the automatic handoff fades: skipping, seeking, and pausing all
+   * cancel it so the transport stays instant.
+   */
+  function maybeCrossfade() {
+    if (fade || index < 0) return false;
+    const nextTrack = queue[index + 1];
+    if (!spare || !preload || !preloadReady || !nextTrack || preload.url !== nextTrack.url) {
+      return false;
+    }
+    const remaining = remainingSeconds();
+    if (remaining == null || remaining > CROSSFADE_SECONDS) return false;
+
+    fade = { out: active, in: spare, startedAt: performance.now(), timer: null };
+    spare.volume = 0;
+    const started = spare.play();
+    if (started && typeof started.catch === 'function') {
+      // A refused start just leaves the ordinary handoff to close the gap.
+      started.catch(() => cancelCrossfade());
+    }
+    fade.timer = setInterval(() => {
+      if (!fade) return;
+      if (applyFadeGains() >= 1) {
+        clearInterval(fade.timer);
+        fade.timer = null;
+        // The outgoing element is silent by now, so the boundary can move with no cut.
+        promoteBufferedTrack();
+      }
+    }, FADE_TICK_MS);
+    return true;
   }
 
   function dropPreload() {
@@ -147,6 +222,11 @@ export function createPlayer() {
     const nextTrack = queue[index + 1];
     if (!spare || !preload || !nextTrack || preload.url !== nextTrack.url) return false;
 
+    // Close out any overlap first. The incoming element is already playing and
+    // stays that way; the retiring one goes back to full volume so it can serve as
+    // the next spare without being stuck at the 0 it faded to.
+    cancelCrossfade({ pauseIncoming: false });
+
     const retiring = active;
     active = spare;
     spare = retiring;
@@ -157,6 +237,7 @@ export function createPlayer() {
     loadShouldPlay = false;
 
     retiring.pause();
+    retiring.volume = volumeLevel;
     retiring.removeAttribute('src');
     retiring.load();
 
@@ -168,6 +249,7 @@ export function createPlayer() {
 
   function loadTrack(nextIndex, shouldPlay, resumeAt = null) {
     if (!queue.length) return;
+    cancelCrossfade();
     dropPreload();
     index = Math.min(Math.max(nextIndex, 0), queue.length - 1);
     const track = queue[index];
@@ -194,6 +276,7 @@ export function createPlayer() {
 
   function seek(seconds) {
     if (index < 0 || !Number.isFinite(seconds)) return;
+    cancelCrossfade();
     const duration = Number.isFinite(active.duration) ? active.duration : null;
     active.currentTime = duration
       ? Math.min(Math.max(seconds, 0), duration)
@@ -204,13 +287,18 @@ export function createPlayer() {
 
   function setVolume(value) {
     if (!Number.isFinite(value)) return;
-    const level = Math.min(Math.max(value, 0), 1);
-    active.volume = level;
-    if (spare) spare.volume = level;
+    volumeLevel = Math.min(Math.max(value, 0), 1);
+    if (fade) {
+      applyFadeGains();
+      return;
+    }
+    active.volume = volumeLevel;
+    if (spare) spare.volume = volumeLevel;
   }
 
   /** Drop the loaded show and silence playback without touching the queue order. */
   function stop() {
+    cancelCrossfade();
     for (const audio of elements) {
       audio.pause();
       audio.removeAttribute('src');
@@ -247,11 +335,13 @@ export function createPlayer() {
     audio.addEventListener('timeupdate', () => {
       if (!isActive()) return;
       primeNextTrack();
+      maybeCrossfade();
       notify('time');
     });
     audio.addEventListener('durationchange', () => {
       if (!isActive()) return;
       primeNextTrack();
+      maybeCrossfade();
       notify('time');
     });
     audio.addEventListener('loadedmetadata', () => {
@@ -272,6 +362,8 @@ export function createPlayer() {
       notify('time');
     });
     audio.addEventListener('volumechange', () => {
+      // Gain ramps during a crossfade are not user volume changes.
+      if (fade && fade.out === audio) return;
       if (isActive()) notify('volume');
     });
     audio.addEventListener('ended', () => {
@@ -347,6 +439,9 @@ export function createPlayer() {
     },
     toggle() {
       if (index < 0) return;
+      // The transport outranks the overlap: cancel it, then act on the element the
+      // listener is actually hearing.
+      cancelCrossfade();
       if (active.paused) startPlayback();
       else active.pause();
     },
