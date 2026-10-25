@@ -1,7 +1,7 @@
 {
   "name": "grateful-vibes",
   "private": true,
-  "version": "1.6.3",
+  "version": "1.6.4",
   "type": "module",
   "description": "Stream Grateful Dead live concerts from the Internet Archive.",
   "scripts": {

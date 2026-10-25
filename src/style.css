@@ -152,6 +152,13 @@ h3 {
   color: var(--text);
 }
 
+/* The emblem is circular art on transparent corners, so a rectangular `outline`
+   would box in nothing. A sub-pixel pure-white halo follows the alpha edge,
+   which is what keeps circular art from bleeding into the dark header. */
+.brand img {
+  filter: drop-shadow(0 0 0.6px oklch(1 0 0 / 0.18));
+}
+
 .brand-bolt {
   width: 26px;
   height: 26px;
@@ -225,7 +232,8 @@ h3 {
     background-color 0.16s ease,
     border-color 0.16s ease,
     color 0.16s ease,
-    box-shadow 0.16s ease;
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
 }
 
 .theme-button:hover,
@@ -233,6 +241,10 @@ h3 {
   background: color-mix(in srgb, var(--theme-1) 14%, var(--bg-soft));
   border-color: var(--ink-cyan);
   box-shadow: 0 3px 0 color-mix(in srgb, var(--ink-cyan) 30%, transparent);
+}
+
+.theme-button:active {
+  transform: scale(0.96);
 }
 
 .theme-button-label {
@@ -243,10 +255,11 @@ h3 {
 }
 
 .theme-chevron {
+  flex: none;
+  width: 11px;
+  height: 11px;
   margin-left: 0.05rem;
   color: var(--muted);
-  font-size: 0.66rem;
-  line-height: 1;
 }
 
 .theme-swatches {
@@ -275,7 +288,9 @@ h3 {
   color: var(--text);
   background: var(--bg-soft);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius);
+  /* Outer radius = option radius (0.55rem) + menu padding (0.85rem), or the rows
+     pinch against the menu corners. */
+  border-radius: 1.4rem;
   box-shadow: 0 14px 34px rgba(12, 62, 55, 0.22);
 }
 
@@ -337,6 +352,10 @@ h3 {
   border-color: color-mix(in srgb, var(--theme-1) 44%, transparent);
 }
 
+.theme-option:active {
+  transform: scale(0.96);
+}
+
 .theme-option .theme-swatches {
   gap: 3px;
 }
@@ -374,6 +393,9 @@ h3 {
 }
 
 .reset-data {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 32px;
   padding: 0.28rem 0.7rem;
   color: var(--ink-cyan);
@@ -390,13 +412,14 @@ h3 {
     background-color 0.16s ease,
     border-color 0.16s ease,
     color 0.16s ease,
-    box-shadow 0.16s ease;
+    box-shadow 0.16s ease,
+    transform 0.16s ease;
 }
 
 .reset-icon {
   display: none;
-  font-size: 0.95rem;
-  line-height: 1;
+  width: 13px;
+  height: 13px;
 }
 
 .reset-data:hover,
@@ -405,6 +428,10 @@ h3 {
   background: color-mix(in srgb, var(--theme-1) 14%, var(--bg-soft));
   border-color: var(--ink-cyan);
   box-shadow: 0 3px 0 color-mix(in srgb, var(--ink-cyan) 30%, transparent);
+}
+
+.reset-data:active {
+  transform: scale(0.96);
 }
 
 .reset-menu {
@@ -591,7 +618,12 @@ h3 {
 
 .search-clear:hover {
   color: var(--text);
-  background: rgba(12, 62, 55, 0.08);
+  background: color-mix(in srgb, var(--theme-1) 16%, transparent);
+}
+
+/* The button is centered with translateY(-50%), so the press scale has to keep it. */
+.search-clear:active {
+  transform: translateY(-50%) scale(0.96);
 }
 
 /* --------------------------------------------------------------- status */
@@ -664,12 +696,17 @@ h3 {
     box-shadow 0.16s ease;
 }
 
+/* Color, border, and glyph fill carry the hover cue; shifting the row under the
+   cursor is far too much motion for a list users sweep through. */
 .show:hover {
-  transform: translateX(3px);
-  background: color-mix(in srgb, var(--accent) 14%, var(--bg-soft));
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-soft));
   border-color: var(--ink-cyan);
   border-left-color: var(--accent-strong);
   box-shadow: 0 3px 0 color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.show:active {
+  transform: scale(0.96);
 }
 
 .show.is-active {
@@ -689,10 +726,18 @@ h3 {
 }
 
 .show-month {
-  color: var(--accent-strong);
+  /* The row is tinted with this same accent, so only the lifted ink is legible on
+     it; the raw color measured as low as 1.48:1. */
+  color: var(--accent-ink, var(--ink-cyan));
   font-size: 0.6rem;
   font-weight: 900;
   letter-spacing: 0.14em;
+}
+
+/* The selected row is tinted by the theme highlight instead of the row accent, so
+   the accent ink no longer pairs with it — white is what clears AA there. */
+.show.is-active .show-month {
+  color: var(--text);
 }
 
 .show-day {
@@ -787,16 +832,26 @@ h3 {
   place-items: center;
   width: 26px;
   height: 26px;
-  color: var(--accent-strong);
-  background: color-mix(in srgb, var(--accent, var(--gd-cyan)) 20%, transparent);
+  /* The raw accent paints the row, so the glyph inside it needs the lifted ink;
+     without it the chevron lands under 3:1 in 24 of the 26 palettes. */
+  color: var(--accent-ink, var(--ink-cyan));
+  /* Opaque, not transparent: a selected row is tinted again by its own background,
+     which pushed the chevron back under 3:1 on the row the listener actually has open. */
+  background: color-mix(in srgb, var(--accent, var(--gd-cyan)) 20%, var(--bg-soft));
   border-radius: 50%;
-  font-size: 0.6rem;
+}
+
+.show-glyph svg {
+  width: 14px;
+  height: 14px;
 }
 
 .show:hover .show-glyph,
 .show:focus-visible .show-glyph {
-  color: #ffffff;
-  background: var(--accent-strong);
+  /* A filled chip of the lifted ink stays legible in both directions: the ink is
+     already light enough for a dark glyph (white on the raw accent hit 1:1). */
+  color: #06201a;
+  background: var(--accent-ink, var(--ink-cyan));
 }
 
 .empty-state {
@@ -921,6 +976,11 @@ h3 {
   box-shadow: 0 5px 0 color-mix(in srgb, var(--accent) 36%, transparent);
 }
 
+/* Declared after :hover so a press beats the card's hover lift. */
+.choice-card:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
 .choice-card.is-active {
   background: color-mix(in srgb, var(--theme-3) 26%, var(--bg-soft));
   border-color: var(--ink-cyan);
@@ -938,7 +998,9 @@ h3 {
 .choice-icon {
   width: 26px;
   height: 26px;
-  color: var(--accent-strong);
+  /* --accent is the raw theme-2, which is black in Casey Jones and navy in Dark
+     Star; the ink variant is the only one guaranteed readable on the card tint. */
+  color: var(--ink-aqua);
 }
 
 .choice-label {
@@ -1054,6 +1116,10 @@ h3 {
   border-color: color-mix(in srgb, var(--theme-1) 46%, transparent);
 }
 
+.recent-item:active {
+  transform: scale(0.96);
+}
+
 .recent-date {
   color: var(--ink-lime);
   font-size: 0.56rem;
@@ -1101,6 +1167,10 @@ h3 {
 .drill-back:hover {
   background: color-mix(in srgb, var(--theme-2) 28%, transparent);
   border-color: color-mix(in srgb, var(--theme-1) 52%, transparent);
+}
+
+.drill-back:active {
+  transform: scale(0.96);
 }
 
 .drill-copy {
@@ -1172,11 +1242,14 @@ h3 {
 }
 
 .picker-item:hover {
-  transform: translateX(3px);
-  background: color-mix(in srgb, var(--accent) 14%, var(--bg-soft));
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-soft));
   border-color: var(--ink-cyan);
   border-left-color: var(--accent-strong);
   box-shadow: 0 3px 0 color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.picker-item:active {
+  transform: scale(0.96);
 }
 
 .picker-item:focus-visible {
@@ -1203,7 +1276,7 @@ h3 {
 
 .picker-arrow {
   flex: none;
-  color: var(--accent-strong);
+  color: var(--accent-ink, var(--ink-cyan));
   font-size: 0.9rem;
 }
 
@@ -1273,7 +1346,7 @@ h3 {
   }
 
   .reset-icon {
-    display: inline;
+    display: block;
   }
 
   .theme-option {
@@ -1433,14 +1506,19 @@ h3 {
   box-shadow: -18px 0 40px rgba(12, 62, 55, 0.18);
   transform: translateX(102%);
   visibility: hidden;
+  /* These durations drive the exit; the enter override lives on .is-open,
+     because a transition is read from the state being transitioned *to*. */
   transition:
-    transform 0.28s ease,
-    visibility 0.28s ease;
+    transform 0.2s ease-out,
+    visibility 0.2s ease-out;
 }
 
 .track-panel.is-open {
   transform: none;
   visibility: visible;
+  transition:
+    transform 0.3s ease-out,
+    visibility 0.3s ease-out;
 }
 
 .panel-backdrop {
@@ -1471,7 +1549,8 @@ h3 {
 }
 
 .panel-empty-icon {
-  font-size: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
   color: var(--ink-aqua);
 }
 
@@ -1505,13 +1584,20 @@ h3 {
   background: rgba(18, 23, 36, 0.86);
   border: 1px solid var(--line);
   border-radius: 50%;
-  font-size: 1.1rem;
-  line-height: 1;
+}
+
+.panel-close svg {
+  width: 12px;
+  height: 12px;
 }
 
 .panel-close:hover {
   color: var(--text);
   border-color: color-mix(in srgb, var(--theme-1) 52%, transparent);
+}
+
+.panel-close:active {
+  transform: scale(0.96);
 }
 
 .panel-title {
@@ -1621,12 +1707,17 @@ h3 {
   border-radius: 0.5rem;
   transition:
     background-color 0.14s ease,
-    border-color 0.14s ease;
+    border-color 0.14s ease,
+    transform 0.14s ease;
 }
 
 .track-button:hover {
-  background: rgba(12, 62, 55, 0.05);
-  border-color: var(--line);
+  background: color-mix(in srgb, var(--theme-1) 12%, transparent);
+  border-color: var(--line-strong);
+}
+
+.track-button:active {
+  transform: scale(0.96);
 }
 
 .track-num {
@@ -1650,7 +1741,9 @@ h3 {
 }
 
 .track-button.is-current {
-  background: color-mix(in srgb, var(--theme-3) 22%, transparent);
+  /* Tinted with theme-4, the same color as the lime ink on this row: a theme-3
+     tint left the title and equalizer at 2.8:1 in themes whose highlight is pale. */
+  background: color-mix(in srgb, var(--theme-4) 18%, transparent);
   border-color: color-mix(in srgb, var(--theme-1) 48%, transparent);
 }
 
@@ -1689,6 +1782,7 @@ h3 {
   height: 100%;
   background: var(--ink-lime);
   border-radius: 1px;
+  transform: scaleY(0.25);
   transform-origin: bottom;
   animation: eq 0.85s ease-in-out infinite alternate;
 }
@@ -1703,17 +1797,19 @@ h3 {
   animation-delay: 0.22s;
 }
 
+/* Cancelling the animation is what actually lets the bars settle: a paused
+   animation still paints its current keyframe value. */
 .track-panel.is-paused .eq i {
-  animation-play-state: paused;
-  height: 35%;
+  animation: none;
+  transform: scaleY(0.35);
 }
 
 @keyframes eq {
   from {
-    height: 25%;
+    transform: scaleY(0.25);
   }
   to {
-    height: 100%;
+    transform: scaleY(1);
   }
 }
 
@@ -1841,8 +1937,12 @@ h3 {
 }
 
 .np-btn:hover:not(:disabled) {
-  background: rgba(12, 62, 55, 0.08);
+  background: color-mix(in srgb, var(--theme-1) 18%, transparent);
   color: var(--ink-aqua);
+}
+
+.np-btn:active:not(:disabled) {
+  transform: scale(0.96);
 }
 
 .np-btn:disabled {
@@ -1866,6 +1966,12 @@ h3 {
   background: var(--theme-1);
   transform: translateY(-1px);
   box-shadow: 0 4px 0 var(--ink-cyan);
+}
+
+/* Cancels the hover lift so the press reads as the button going down. */
+.np-btn-main:active:not(:disabled) {
+  transform: scale(0.96);
+  box-shadow: 0 2px 0 var(--ink-cyan);
 }
 
 .np-btn-main:disabled {
@@ -1954,6 +2060,8 @@ h3 {
 .np-sonos-rooms:disabled .np-sonos-room-option { opacity: 0.55; }
 
 .np-sonos-refresh {
+  display: grid;
+  place-items: center;
   width: 30px;
   height: 30px;
   flex: none;
@@ -1961,8 +2069,11 @@ h3 {
   background: transparent;
   border: 1px solid var(--line);
   border-radius: 50%;
-  font-size: 1rem;
-  line-height: 1;
+}
+
+.np-sonos-refresh svg {
+  width: 13px;
+  height: 13px;
 }
 
 .np-sonos-refresh:hover:not(:disabled) { color: var(--ink-aqua); }

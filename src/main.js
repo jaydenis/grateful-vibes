@@ -11,6 +11,7 @@ import {
   THEMES,
   chooseAccentText,
   getTheme,
+  readableInk,
   themeActionColor,
   themeBackground,
   themeInks,
@@ -36,6 +37,9 @@ const monthAbbr = (month) =>
 const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 const PAUSE_ICON =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+/** Show rows open the setlist, so the row badge is a disclosure chevron, not a play glyph. */
+const TRACKLIST_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 const el = (id) => document.getElementById(id);
 const els = {
@@ -1361,7 +1365,11 @@ function createPickerItem(group, withCount) {
   button.type = 'button';
   button.className = 'picker-item';
   button.dataset.key = group.key;
-  button.style.setProperty('--accent', activeTheme.colors[hash(group.key) % activeTheme.colors.length]);
+  const accent = activeTheme.colors[hash(group.key) % activeTheme.colors.length];
+  button.style.setProperty('--accent', accent);
+  // The raw palette color is far too dark to draw a 12px arrow or chevron on the
+  // row it also tints, so the ink variant carries every glyph on that row.
+  button.style.setProperty('--accent-ink', readableInk(accent));
 
   const label = document.createElement('span');
   label.className = 'picker-label';
@@ -1793,7 +1801,9 @@ function createShowItem(show) {
   button.type = 'button';
   button.className = 'show';
   button.dataset.id = show.id;
-  button.style.setProperty('--accent', activeTheme.colors[hash(show.id) % activeTheme.colors.length]);
+  const accent = activeTheme.colors[hash(show.id) % activeTheme.colors.length];
+  button.style.setProperty('--accent', accent);
+  button.style.setProperty('--accent-ink', readableInk(accent));
   button.classList.toggle('is-active', show.id === state.selectedId);
 
   const parts = isoParts(show.date);
@@ -1842,7 +1852,7 @@ function createShowItem(show) {
   const glyph = document.createElement('span');
   glyph.className = 'show-glyph';
   glyph.setAttribute('aria-hidden', 'true');
-  glyph.textContent = '▶';
+  glyph.innerHTML = TRACKLIST_ICON;
   side.append(plays, glyph);
 
   button.append(date, body, side);
