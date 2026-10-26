@@ -124,7 +124,9 @@ A few platform notes:
   Cache Storage, one cache per show. A saved show then plays with no network: the
   setlist comes from the stored manifest and each cached track is played from a
   blob URL. The favorites view reports how many shows are saved offline, and each
-  row carries its own offline status.
+  row carries its own offline status: a live track count and progress bar while the
+  audio downloads, then the saved or failed result. A row whose copy did not finish
+  offers **Retry**, which re-downloads it without unfavoriting the show.
 - Mirrors the open browse view into the URL — the dimension, its group or city
   drill-down, the selected song, and the filter text — so a view can be reloaded or
   shared. Filter changes use `replaceState`, so the back button stays navigation.
@@ -194,7 +196,8 @@ listed once.
   it may be missing or disabled in some webviews and private windows, it is limited
   by the browser's storage quota (a full show is roughly 0.5–1.5 GB), and a refused
   or failed download leaves the favorite in place but streamable only. Downloads run
-  in the foreground while the app is open, with no resume and no background sync.
+  in the foreground while the app is open, with no resume and no background sync;
+  **Retry** starts the setlist over rather than fetching only the missing tracks.
   Offline audio is stored unencrypted in the app's cache, yet never leaves the
   device. Sonos players always fetch the Archive.org stream because a blob URL only
   exists on this device.

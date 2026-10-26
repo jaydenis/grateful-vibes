@@ -90,6 +90,39 @@ function seedSavedFavorite() {
   );
 }
 
+/** A favorite whose last download failed, with the setlist still on the device. */
+function seedFailedFavorite() {
+  window.localStorage.setItem(
+    FAVORITES_KEY,
+    JSON.stringify([
+      {
+        ...SHOWS[0],
+        addedAt: 1,
+        cache: { state: 'failed', tracks: 0, bytes: 0, savedAt: 1 },
+        tracks: TRACKS,
+      },
+    ]),
+  );
+}
+
+/**
+ * Hand out one release per Archive.org request so a test can stop the download
+ * between tracks and read the row while it is genuinely in progress.
+ */
+function gateFetch() {
+  const releases = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      () =>
+        new Promise((resolve) => {
+          releases.push(() => resolve(new Response('audio-bytes', { status: 200 })));
+        }),
+    ),
+  );
+  return releases;
+}
+
 /** Cache Storage holding the saved tracks for show-a. */
 function seedCacheStorage() {
   const entries = new Map(TRACKS.map((track) => [track.url, new Response('audio-bytes')]));
@@ -282,12 +315,89 @@ describe('favorites UI', () => {
     expect(document.getElementById('list-status').textContent).toContain('1 saved offline');
   });
 
+  it('shows per-favorite download progress and hides retry while saving', async () => {
+    seedFailedFavorite();
+    seedCacheStorage();
+    await boot({ query: '?favorites=1' });
+
+    const badge = () => document.querySelector('#show-list .show-offline');
+    const bar = () => document.querySelector('#show-list .show-progress');
+    const retry = () => document.querySelector('#show-list .show-retry');
+
+    expect(badge().textContent).toBe('Not saved offline');
+    expect(retry().hidden).toBe(false);
+    expect(bar().hidden).toBe(true);
+
+    // jsdom has no real fetch, so each track waits until the test releases it.
+    const releases = gateFetch();
+    retry().click();
+
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    expect(badge().textContent).toBe('Saving offline · 0/2 tracks');
+    expect(document.getElementById('list-status').textContent).toContain('1 downloading');
+    expect(bar().hidden).toBe(false);
+    expect(bar().getAttribute('role')).toBe('progressbar');
+    expect(bar().getAttribute('aria-valuemax')).toBe('2');
+    expect(bar().getAttribute('aria-valuenow')).toBe('0');
+    expect(retry().hidden).toBe(true);
+
+    releases[0]();
+
+    // One of two tracks is stored: the badge and the bar both move.
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    expect(badge().textContent).toBe('Saving offline · 1/2 tracks');
+    expect(bar().getAttribute('aria-valuenow')).toBe('1');
+    expect(bar().querySelector('.show-progress-fill').style.width).toBe('50%');
+
+    releases[1]();
+
+    await vi.waitFor(() => expect(badge().textContent).toBe('Saved offline · 2 tracks'));
+    expect(bar().hidden).toBe(true);
+    expect(retry().hidden).toBe(true);
+    expect(readFavorites()[0].cache).toEqual(
+      expect.objectContaining({ state: 'saved', tracks: TRACKS.length }),
+    );
+  });
+
+  it('keeps the retry control after a failed download', async () => {
+    seedFailedFavorite();
+    seedCacheStorage();
+    await boot({ query: '?favorites=1' });
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 403 })));
+    document.querySelector('#show-list .show-retry').click();
+
+    await vi.waitFor(() =>
+      expect(document.getElementById('list-alert-msg').textContent).toContain(
+        'None of this show could be saved offline.',
+      ),
+    );
+    expect(document.getElementById('list-alert').hidden).toBe(false);
+    expect(document.querySelector('#show-list .show-offline').textContent).toBe('Not saved offline');
+    expect(document.querySelector('#show-list .show-retry').hidden).toBe(false);
+    expect(readFavorites()[0].cache.state).toBe('failed');
+  });
+
+  it('never offers retry for a finished copy', async () => {
+    seedSavedFavorite();
+    seedCacheStorage();
+    await boot({ query: '?favorites=1' });
+
+    expect(document.querySelector('#show-list .show-offline').textContent).toBe(
+      'Saved offline · 2 tracks',
+    );
+    expect(document.querySelector('#show-list .show-retry').hidden).toBe(true);
+    expect(document.querySelector('#show-list .show-progress').hidden).toBe(true);
+  });
+
   it('leaves ordinary browsing untouched', async () => {
     await boot();
 
     expect(document.getElementById('favorites-count').hidden).toBe(true);
     expect(document.querySelectorAll('#show-list .show-item').length).toBe(2);
     expect(document.querySelectorAll('#show-list .show-fav').length).toBe(2);
+    expect(document.querySelectorAll('#show-list .show-retry').length).toBe(0);
+    expect(document.querySelectorAll('#show-list .show-progress').length).toBe(0);
     expect(window.location.search).toBe('');
 
     // A star click must not open the setlist.

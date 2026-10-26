@@ -196,6 +196,8 @@ let recentShows = loadRecentShows();
 let favorites = loadFavorites();
 /** showId -> AbortController for an in-flight offline download. */
 const favoriteJobs = new Map();
+/** showId -> { done, total } for that download, refreshed by its onProgress hook. */
+const favoriteProgress = new Map();
 /** Favorites removed while their blob URLs are still loaded in the player. */
 const pendingUrlReleases = new Set();
 let sessionRestored = false;
@@ -1871,7 +1873,7 @@ function renderShows(group, config) {
   els.listEnd.hidden = remaining > 0 || matches.length === 0 || state.loading;
 }
 
-function createShowItem(show) {
+function createShowItem(show, { favoriteRow = false } = {}) {
   const item = document.createElement('li');
   item.className = 'show-item';
 
@@ -1920,13 +1922,21 @@ function createShowItem(show) {
     tag.textContent = show.source;
     meta.append(tag);
   }
-  // Only favorited shows carry a cache record, so this badge stays off the catalog.
-  const cacheLabel = favoriteCacheLabel(show);
-  if (cacheLabel) {
+  // Only a favorites row tracks an offline copy, so the badge and the download bar
+  // stay off the catalog. syncFavoriteRow keeps both current without a re-render.
+  if (favoriteRow) {
     const offlineTag = document.createElement('span');
     offlineTag.className = 'show-offline';
-    offlineTag.textContent = cacheLabel;
     meta.append(offlineTag);
+
+    const progressBar = document.createElement('span');
+    progressBar.className = 'show-progress';
+    progressBar.hidden = true;
+    progressBar.setAttribute('role', 'progressbar');
+    const progressFill = document.createElement('span');
+    progressFill.className = 'show-progress-fill';
+    progressBar.append(progressFill);
+    meta.append(progressBar);
   }
   body.append(title, meta);
 
@@ -1960,6 +1970,19 @@ function createShowItem(show) {
   syncFavoriteButton(favorite, show);
 
   item.append(button, favorite);
+
+  if (favoriteRow) {
+    item.dataset.favRow = show.id;
+    item.classList.add('has-retry');
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'show-retry';
+    retry.textContent = 'Retry';
+    retry.hidden = true;
+    item.append(retry);
+    syncFavoriteRow(item, show);
+  }
+
   return item;
 }
 
@@ -1981,15 +2004,71 @@ function findShow(id) {
   return state.shows.find((show) => show.id === id) ?? favorites.find((entry) => entry.id === id) ?? null;
 }
 
+function trackCount(count) {
+  return `${formatCount(count)} ${count === 1 ? 'track' : 'tracks'}`;
+}
+
 function favoriteCacheLabel(show) {
-  if (show?.id && favoriteJobs.has(show.id)) return 'Saving offline…';
-  const cache = show?.cache;
-  if (!cache) return '';
-  if (cache.state === 'saved') {
-    return `Saved offline${cache.tracks ? ` · ${cache.tracks} tracks` : ''}`;
+  if (show?.id && favoriteJobs.has(show.id)) {
+    const { done = 0, total = 0 } = favoriteProgress.get(show.id) ?? {};
+    // A one-track show has no useful fraction; the bar still shows it moving.
+    if (total < 2) return 'Saving offline…';
+    // The last track is written and measured before the record is updated.
+    if (done >= total) return 'Finishing offline copy…';
+    return `Saving offline · ${Math.min(done, total)}/${total} tracks`;
   }
-  if (cache.state === 'partial') return `Partly saved · ${cache.tracks} tracks`;
+  // Only favorites reach here, and a favorite without a record has never been saved
+  // (offline storage was unavailable when it was added), so it still needs a status.
+  const cache = show?.cache;
+  if (!cache) return 'Not saved offline';
+  if (cache.state === 'saved') {
+    return `Saved offline${cache.tracks ? ` · ${trackCount(cache.tracks)}` : ''}`;
+  }
+  if (cache.state === 'partial') return `Partly saved · ${trackCount(cache.tracks)}`;
   return 'Not saved offline';
+}
+
+/**
+ * Keep one favorites row in step with the stored record and any download in
+ * flight. Progress ticks come once per track, so this touches only the nodes that
+ * change: rebuilding the row would drop keyboard focus off the retry control.
+ */
+function syncFavoriteRow(item, show) {
+  const entry = favorites.find((favorite) => favorite.id === show.id) ?? show;
+  const saving = favoriteJobs.has(show.id);
+  const label = favoriteCacheLabel(entry);
+
+  const badge = item.querySelector('.show-offline');
+  if (badge) {
+    badge.textContent = label;
+    badge.hidden = !label;
+  }
+
+  const bar = item.querySelector('.show-progress');
+  if (bar) {
+    const progress = saving ? favoriteProgress.get(show.id) : null;
+    const total = progress?.total ?? 0;
+    const done = Math.min(progress?.done ?? 0, total);
+    bar.hidden = !saving;
+    if (saving) {
+      bar.setAttribute('aria-valuemin', '0');
+      bar.setAttribute('aria-valuemax', String(total));
+      bar.setAttribute('aria-valuenow', String(done));
+      bar.setAttribute('aria-label', `Saving ${show.title || 'this show'} offline`);
+      const fill = bar.querySelector('.show-progress-fill');
+      if (fill) fill.style.width = total ? `${(done / total) * 100}%` : '0%';
+    }
+  }
+
+  const retry = item.querySelector('.show-retry');
+  if (retry) {
+    // A finished copy has nothing to retry; an in-flight one already has progress.
+    const retryable = offlineSupported() && !saving && entry.cache?.state !== 'saved';
+    retry.hidden = !retryable;
+    retry.disabled = !retryable;
+    retry.title = `Retry saving ${show.title || 'this show'} offline`;
+    retry.setAttribute('aria-label', retry.title);
+  }
 }
 
 function renderFavoritesNav() {
@@ -2010,23 +2089,30 @@ function renderFavorites() {
       'No favorites yet. Star a show to keep it here and save it for offline listening.';
     fragment.append(empty);
   } else {
-    for (const favorite of favorites) fragment.append(createShowItem(favorite));
+    for (const favorite of favorites) {
+      fragment.append(createShowItem(favorite, { favoriteRow: true }));
+    }
   }
 
   els.showList.replaceChildren(fragment);
   els.loadMore.hidden = true;
   els.listEnd.hidden = true;
+  renderFavoritesStatus();
+}
 
+function renderFavoritesStatus() {
   if (!favorites.length) {
     els.listStatus.textContent = 'Favorites are saved on this device.';
     return;
   }
 
   const saved = favorites.filter((entry) => entry.cache?.state === 'saved').length;
+  const saving = favorites.filter((entry) => favoriteJobs.has(entry.id)).length;
+  const downloading = saving ? ` · ${formatCount(saving)} downloading` : '';
   const unavailable = offlineSupported() ? '' : ' · offline copies unavailable on this device';
   els.listStatus.textContent = `${formatCount(favorites.length)} favorite${
     favorites.length === 1 ? '' : 's'
-  } · ${formatCount(saved)} saved offline${unavailable}`;
+  } · ${formatCount(saved)} saved offline${downloading}${unavailable}`;
 }
 
 function syncFavoriteButton(button, show) {
@@ -2072,8 +2158,13 @@ function syncFavoriteControls() {
     const show = findShow(button.dataset.favId);
     if (show) syncFavoriteButton(button, show);
   }
+  for (const item of els.showList.querySelectorAll('.show-item[data-fav-row]')) {
+    const show = favorites.find((entry) => entry.id === item.dataset.favRow);
+    if (show) syncFavoriteRow(item, show);
+  }
   syncPanelFavorite();
   renderPanelOffline();
+  if (state.favoritesOpen) renderFavoritesStatus();
 }
 
 /** Route a favorite message to the panel when it shows that concert, else the list. */
@@ -2136,14 +2227,18 @@ async function startFavoriteCache(showId) {
 
   const controller = new AbortController();
   favoriteJobs.set(showId, controller);
+  favoriteProgress.set(showId, { done: 0, total: tracks.length, bytes: 0 });
   syncFavoriteControls();
 
   try {
     const result = await cacheShow(showId, tracks, {
       signal: controller.signal,
       onProgress: (progress) => {
-        if (state.show?.id !== showId) return;
-        setPanelNote(`Saving track ${Math.min(progress.done, progress.total)} of ${progress.total}…`);
+        favoriteProgress.set(showId, progress);
+        syncFavoriteControls();
+        if (state.show?.id === showId) {
+          setPanelNote(`Saving track ${Math.min(progress.done, progress.total)} of ${progress.total}…`);
+        }
       },
     });
 
@@ -2171,6 +2266,7 @@ async function startFavoriteCache(showId) {
     );
   } finally {
     favoriteJobs.delete(showId);
+    favoriteProgress.delete(showId);
     syncFavoriteControls();
     if (state.favoritesOpen) render();
   }
@@ -2193,6 +2289,17 @@ function addFavoriteShow(show) {
   }
 
   void startFavoriteCache(show.id);
+}
+
+/** Try the offline copy again without touching the favorite or its saved setlist. */
+function retryFavoriteCache(showId) {
+  if (!showId || !isFavorite(showId) || favoriteJobs.has(showId)) return;
+  if (!offlineSupported()) {
+    reportFavoriteMessage(showId, 'Offline copies are unavailable on this device.', true);
+    return;
+  }
+  reportFavoriteMessage(showId, 'Trying to save this show offline again…');
+  void startFavoriteCache(showId);
 }
 
 async function unfavoriteShow(id) {
@@ -2899,6 +3006,12 @@ els.showList.addEventListener('click', (event) => {
     if (show) void toggleFavorite(show);
     return;
   }
+  const retry = event.target.closest('.show-retry');
+  if (retry) {
+    const item = retry.closest('[data-fav-row]');
+    if (item?.dataset.favRow) retryFavoriteCache(item.dataset.favRow);
+    return;
+  }
   const button = event.target.closest('.show');
   if (button?.dataset.id) selectShow(button.dataset.id);
 });
@@ -3200,6 +3313,7 @@ function resetPersistedData() {
   favorites = clearFavorites();
   for (const controller of favoriteJobs.values()) controller.abort();
   favoriteJobs.clear();
+  favoriteProgress.clear();
   pendingUrlReleases.clear();
   releaseAllUrls();
   void clearAllOffline();

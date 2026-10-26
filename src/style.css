@@ -718,6 +718,43 @@ h3 {
   transform: scale(0.92);
 }
 
+/* Favorites rows carry the offline state, so they add a column for the retry
+   control. It collapses to nothing while the button is hidden. */
+.show-item.has-retry {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.show-retry {
+  margin-top: 0.3rem;
+  padding: 0.34rem 0.55rem;
+  color: var(--ink-yellow);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--ink-yellow) 40%, transparent);
+  border-radius: 999px;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.show-retry:hover,
+.show-retry:focus-visible {
+  background: rgba(224, 244, 244, 0.1);
+  border-color: var(--ink-yellow);
+}
+
+.show-retry:active {
+  transform: scale(0.94);
+}
+
+.show-retry[hidden] {
+  display: none;
+}
+
 .show {
   --accent-strong: var(--accent, var(--gd-cyan));
   display: grid;
@@ -839,6 +876,33 @@ h3 {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.show-offline[hidden] {
+  display: none;
+}
+
+/* A thin bar beside the badge: the text already carries the track count, so the
+   bar only has to show that the download is moving. */
+.show-progress {
+  flex: 0 0 3.2rem;
+  height: 4px;
+  overflow: hidden;
+  background: rgba(196, 210, 235, 0.22);
+  border-radius: 999px;
+}
+
+.show-progress[hidden] {
+  display: none;
+}
+
+.show-progress-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--ink-lime);
+  border-radius: inherit;
+  transition: width 0.2s ease;
 }
 
 .source-tag {

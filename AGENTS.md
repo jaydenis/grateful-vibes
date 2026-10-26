@@ -101,6 +101,8 @@ code in the matching section rather than appending to the file.
   never `player.js`. A blob URL only exists on this device, so Sonos playback maps tracks
   back to `remoteUrl`. Object URLs are cached per show and released only after the player
   moves off that show — revoking a URL the active element is using cuts playback off.
+  Per-row download progress and retry live in `main.js` (`startFavoriteCache`); this module
+  only reports counts through `onProgress`.
 - **`themes.js`** defines each palette as an ordered color array. `applyTheme()` in
   `main.js` maps it to the CSS variables `--theme-1` … `--theme-5`, `--theme-action`,
   and `--accent-text`, plus `document.documentElement.dataset.theme`. New CSS should
@@ -147,6 +149,6 @@ code in the matching section rather than appending to the file.
 
 ## Out of scope by design
 
-Do not add these without an explicit request: downloads, accounts, favorites or user
-playlists, non-Grateful-Dead content, a web backend, or API keys. The whole app is
-static and keyless, and that is deliberate.
+Do not add these without an explicit request: manual downloads beyond a favorite's
+automatic offline copy, accounts, user playlists, non-Grateful-Dead content, a web
+backend, or API keys. The whole app is static and keyless, and that is deliberate.
