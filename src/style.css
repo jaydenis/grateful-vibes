@@ -23,7 +23,7 @@
   --ink-yellow: var(--theme-3-ink, var(--theme-3));
   --ink-orange: var(--theme-5-ink, var(--theme-5));
 
-  --bg: color-mix(in srgb, var(--theme-1) 7%, #080a12);
+  --bg: color-mix(in srgb, var(--theme-1) 7%, #c2d6d4);
   --bg-soft: #111521;
   --surface: #151a28;
   --line: rgba(196, 210, 235, 0.14);

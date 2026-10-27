@@ -6,12 +6,12 @@ export const THEMES = [
   {
     id: 'scarlet-begonias',
     name: 'Scarlet Begonias',
-    colors: ['#d7263d', '#2a9d8f', '#f4c430', '#1b4332', '#f9d5c0'],
+    colors: ['#E71D36', '#9B0A21', '#F49CBB', '#568e58', '#F2C94C'],
   },
   {
     id: 'ripple',
     name: 'Ripple',
-    colors: ['#2e86ab', '#8ecae6', '#cfe8ef', '#1d3557', '#e9f5f9'],
+    colors: ['#2e86ab', '#8ecae6', '#cfe8ef', '#486285', '#e9f5f9'],
   },
   {
     id: 'brown-eyed-women',
@@ -26,12 +26,12 @@ export const THEMES = [
   {
     id: 'ship-of-fools',
     name: 'Ship of Fools',
-    colors: ['#1f9e8f', '#7fd6c9', '#ff6b9d', '#2c4f5c', '#f3e9d2'],
+    colors: ['#1f9e8f', '#7fd6c9', '#ff6b9d', '#4f6973', '#f3e9d2'],
   },
   {
     id: 'dark-star',
     name: 'Dark Star',
-    colors: ['#4c1d95', '#1e1b4b', '#a78bfa', '#0b1026', '#e0e7ff'],
+    colors: ['#4c1d95', '#3a3a3e', '#a78bfa', '#265454', '#e0e7ff'],
   },
   {
     id: 'the-other-one',
