@@ -13,12 +13,16 @@ const api = vi.hoisted(() => ({
   fetchSongbook: vi.fn(),
   fetchSongShows: vi.fn(),
 }));
+const tauri = vi.hoisted(() => ({
+  enabled: false,
+  invoke: vi.fn(),
+}));
 
 vi.mock('../src/api.js', () => api);
 vi.mock('@tauri-apps/api/app', () => ({ exit: vi.fn(), onBackButtonPress: vi.fn() }));
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn(async () => false),
-  isTauri: () => false,
+  invoke: (...args) => tauri.invoke(...args),
+  isTauri: () => tauri.enabled,
 }));
 vi.mock('@tauri-apps/api/window', () => ({
   getCurrentWindow: () => ({ setTitle: vi.fn() }),
@@ -141,6 +145,7 @@ async function boot({
   storageBlocked = false,
   catalogFailure = false,
   tracksFailure = false,
+  sonosRooms = [],
 } = {}) {
   document.body.innerHTML = BODY;
   window.history.replaceState(null, '', `/${query}`);
@@ -167,6 +172,13 @@ async function boot({
     });
   }
 
+  tauri.enabled = sonosRooms.length > 0;
+  tauri.invoke.mockImplementation(async (command) => {
+    if (command === 'sonos_supported') return true;
+    if (command === 'sonos_discover') return sonosRooms;
+    return undefined;
+  });
+
   vi.resetModules();
   await import('../src/main.js');
 
@@ -192,9 +204,50 @@ async function boot({
 beforeEach(() => {
   window.localStorage.clear();
   vi.clearAllMocks();
+  tauri.enabled = false;
 });
 
 describe('favorites UI', () => {
+  it('isolates selected Sonos rooms and lets an active room be deselected', async () => {
+    const rooms = [
+      { id: '192.168.1.10', name: 'Den', rinconId: 'RINCON_DEN' },
+      { id: '192.168.1.11', name: 'Kitchen', rinconId: 'RINCON_KITCHEN' },
+    ];
+    vi.spyOn(window, 'setInterval').mockImplementation(() => 0);
+    await boot({ sonosRooms: rooms });
+    await vi.waitFor(() => expect(document.getElementById('np-output').hidden).toBe(false));
+
+    const mode = document.getElementById('np-output-mode');
+    mode.value = 'sonos';
+    mode.dispatchEvent(new Event('change'));
+    document.querySelectorAll('#np-sonos-rooms input')[0].click();
+    await vi.waitFor(() => expect(document.querySelectorAll('#np-sonos-rooms input')[1].disabled).toBe(false));
+    document.querySelectorAll('#np-sonos-rooms input')[1].click();
+    await vi.waitFor(() => expect(document.querySelectorAll('#np-sonos-rooms input')[1].checked).toBe(true));
+
+    document.querySelector('#show-list .show').click();
+    await vi.waitFor(() =>
+      expect(tauri.invoke).toHaveBeenCalledWith('sonos_play', expect.objectContaining({ playerId: rooms[0].id })),
+    );
+    expect(tauri.invoke).toHaveBeenCalledWith('sonos_player_leave', { playerId: rooms[0].id });
+    expect(tauri.invoke).toHaveBeenCalledWith('sonos_player_leave', { playerId: rooms[1].id });
+    expect(tauri.invoke).toHaveBeenCalledWith('sonos_player_join', {
+      playerId: rooms[1].id,
+      coordinatorRinconId: rooms[0].rinconId,
+    });
+
+    expect(document.querySelectorAll('#np-sonos-rooms input')[1].disabled).toBe(false);
+    const leavesBeforeDeselect = tauri.invoke.mock.calls.filter(
+      ([command, payload]) => command === 'sonos_player_leave' && payload.playerId === rooms[1].id,
+    ).length;
+    document.querySelectorAll('#np-sonos-rooms input')[1].click();
+    await vi.waitFor(() =>
+      expect(tauri.invoke.mock.calls.filter(
+        ([command, payload]) => command === 'sonos_player_leave' && payload.playerId === rooms[1].id,
+      )).toHaveLength(leavesBeforeDeselect + 1),
+    );
+  });
+
   it('opens the favorites view from the sidebar menu item', async () => {
     await boot();
 

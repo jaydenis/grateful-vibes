@@ -182,7 +182,8 @@ const output = {
   rooms: [],
   roomId: '',
   roomIds: [],
-  selectionLocked: false,
+  groupedRoomIds: [],
+  selectionUpdating: false,
   sonos: { queue: [], index: -1, context: null, playing: false, sawPlaying: false, currentTime: 0, duration: 0, volume: 0.5 },
   polling: false,
 };
@@ -240,7 +241,7 @@ function renderRoomChoices() {
   legend.textContent = 'Select one or two Sonos rooms';
   const help = document.createElement('span');
   help.className = 'visually-hidden';
-  help.textContent = 'Select one room or both. Stop playback before changing rooms.';
+  help.textContent = 'Select one room or both. Changes apply to Sonos playback immediately.';
   const fragment = document.createDocumentFragment();
   fragment.append(legend, help);
   for (const room of output.rooms) {
@@ -250,7 +251,7 @@ function renderRoomChoices() {
     checkbox.type = 'checkbox';
     checkbox.value = room.id;
     checkbox.checked = output.roomIds.includes(room.id);
-    checkbox.disabled = output.selectionLocked || (output.roomIds.length >= 2 && !checkbox.checked);
+    checkbox.disabled = output.selectionUpdating || (output.roomIds.length >= 2 && !checkbox.checked);
     const name = document.createElement('span');
     name.textContent = room.name;
     label.append(checkbox, name);
@@ -265,9 +266,9 @@ function selectedRoomNames() {
 }
 
 async function updateRoomSelection() {
-  if (output.selectionLocked) {
+  if (output.selectionUpdating) {
     renderRoomChoices();
-    setOutputStatus('Stop playback before changing rooms.');
+    setOutputStatus('Updating Sonos rooms…');
     return;
   }
   const previous = output.roomIds;
@@ -277,16 +278,55 @@ async function updateRoomSelection() {
     setOutputStatus('Select one or two rooms.');
     return;
   }
-  output.roomIds = selected;
-  output.roomId = selected[0] ?? '';
-  for (const removedId of previous.filter((id) => !selected.includes(id))) {
-    if (previous.length > 1) {
-      void invoke('sonos_player_leave', { playerId: removedId }).catch(() => {});
-    }
-  }
+  const wasPlaying = output.mode === 'sonos' && output.sonos.playing;
+  const resumeAt = output.sonos.currentTime;
+  const { context, queue, index } = output.sonos;
+  output.selectionUpdating = true;
   renderRoomChoices();
-  setOutputStatus(selectedRoomNames().join(' + ') || 'Choose one or two Sonos rooms.');
-  if (output.mode === 'sonos') renderTransport(activeSnapshot());
+  setOutputStatus('Updating Sonos rooms…');
+  try {
+    // Stop the old coordinator before changing its group so a removed room cannot
+    // keep receiving the stream while Sonos applies the new membership.
+    if (wasPlaying && previous[0]) {
+      await invoke('sonos_control', { playerId: previous[0], action: 'stop', value: null });
+    }
+    for (const removedId of previous.filter((id) => !selected.includes(id))) {
+      await invoke('sonos_player_leave', { playerId: removedId });
+    }
+    output.roomIds = selected;
+    output.roomId = selected[0] ?? '';
+    output.groupedRoomIds = [];
+    if (wasPlaying && selected.length) {
+      await playOnSonos(context, queue, index, resumeAt);
+    } else if (!selected.length) {
+      output.sonos.playing = false;
+    }
+    setOutputStatus(selectedRoomNames().join(' + ') || 'Choose one or two Sonos rooms.');
+  } catch (error) {
+    output.sonos.playing = false;
+    setOutputStatus(error?.toString?.() || 'Sonos could not update the selected rooms.', true);
+  } finally {
+    output.selectionUpdating = false;
+    renderRoomChoices();
+    if (output.mode === 'sonos') renderTransport(activeSnapshot());
+  }
+}
+
+async function configureSonosRooms() {
+  if (!output.roomIds.length || output.groupedRoomIds.join('|') === output.roomIds.join('|')) return;
+  // A selected coordinator may already be playing to other rooms. Making every
+  // selected room standalone first establishes an exact app-controlled group.
+  for (const playerId of output.roomIds) {
+    await invoke('sonos_player_leave', { playerId });
+  }
+  if (output.roomIds.length > 1) {
+    const coordinator = output.rooms.find((room) => room.id === output.roomIds[0]);
+    await invoke('sonos_player_join', {
+      playerId: output.roomIds[1],
+      coordinatorRinconId: coordinator.rinconId,
+    });
+  }
+  output.groupedRoomIds = [...output.roomIds];
 }
 
 async function refreshSonosRooms() {
@@ -356,20 +396,13 @@ async function playOnSonos(show, tracks, index, resumeAt = 0) {
   const browserState = player.snapshot();
   if (browserState.playing) player.toggle();
   output.sonos = { queue: remoteTracks, index, context: show, playing: true, sawPlaying: false, currentTime: resumeAt, duration: track.duration || 0, volume: output.sonos.volume };
-  output.selectionLocked = true;
   renderRoomChoices();
   els.npOutputMode.value = 'sonos';
   renderTransport(activeSnapshot());
   highlightTracks(activeSnapshot());
   setOutputStatus(`Connecting to ${selectedRoomNames().join(' + ')}…`);
   try {
-    if (output.roomIds.length > 1) {
-      const coordinator = output.rooms.find((room) => room.id === output.roomIds[0]);
-      await invoke('sonos_player_join', {
-        playerId: output.roomIds[1],
-        coordinatorRinconId: coordinator.rinconId,
-      });
-    }
+    await configureSonosRooms();
     await invoke('sonos_play', { playerId: output.roomId, url: track.url, title: track.title });
     if (resumeAt > 0) await sonosControl('seek', resumeAt);
     setOutputStatus(
@@ -380,7 +413,6 @@ async function playOnSonos(show, tracks, index, resumeAt = 0) {
     rememberShow(show);
   } catch (error) {
     output.sonos.playing = false;
-    output.selectionLocked = false;
     renderRoomChoices();
     renderTransport(activeSnapshot());
     setOutputStatus(error?.toString?.() || 'Sonos could not play this track. Check Archive.org availability and speaker access.', true);
@@ -415,7 +447,6 @@ async function pollSonos() {
       advanced = true;
     }
     if (!advanced && status.state === 'STOPPED' && output.sonos.index + 1 >= output.sonos.queue.length) {
-      output.selectionLocked = false;
       renderRoomChoices();
     }
     saveCurrentSession(activeSnapshot());
@@ -432,7 +463,7 @@ function toggleOutput() {
   const snapshot = activeSnapshot();
   if (!snapshot.track) return;
   if (output.mode === 'sonos') {
-    if (!output.selectionLocked && !output.sonos.playing) {
+    if (!output.sonos.playing && !output.groupedRoomIds.length) {
       playOnSonos(output.sonos.context, output.sonos.queue, output.sonos.index, output.sonos.currentTime);
       return;
     }
@@ -446,7 +477,6 @@ async function stopSonos() {
   if (!output.roomId) return;
   if (!await sonosControl('stop')) return;
   output.sonos.playing = false;
-  output.selectionLocked = false;
   renderRoomChoices();
   renderTransport(activeSnapshot());
 }
@@ -493,7 +523,7 @@ function chooseOutput(mode) {
   for (const followerId of output.roomIds.slice(1)) {
     void invoke('sonos_player_leave', { playerId: followerId }).catch(() => {});
   }
-  output.selectionLocked = false;
+  output.groupedRoomIds = [];
   renderRoomChoices();
   const local = player.snapshot();
   if (local.track && sonos.queue[sonos.index]?.id === local.track.id && sonos.context?.id === local.context?.id) player.seek(sonos.currentTime);
@@ -3305,7 +3335,7 @@ function resetPersistedData() {
   els.npSonosRooms.hidden = true;
   output.roomIds = [];
   output.roomId = '';
-  output.selectionLocked = false;
+  output.groupedRoomIds = [];
   renderRoomChoices();
   renderTransport(player.snapshot());
   clearPanelSelection();

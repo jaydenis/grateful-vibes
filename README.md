@@ -111,9 +111,11 @@ A few platform notes:
   equal-power crossfade, so consecutive tracks from a concert run together with no gap
   and no cut. Skipping, seeking, or pausing cancels the fade and acts immediately.
 - On desktop, can optionally route playback to one or two discovered Sonos rooms
-  over the local network. Two selected rooms join a Sonos group so they play in
-  sync. The browser player remains the default output; room selection locks while
-  playback is active and is released by Stop.
+  over the local network. The app isolates the selected room or pair before it
+  starts a stream, so pre-existing group members do not receive the music. Room
+  selections can also change during playback; the stream restarts at its current
+  position for the newly selected room or pair. The browser player remains the
+  default output.
 - Remembers the selected theme, volume, the last show and track position, and the
   six most recently played shows in `localStorage`. A reload or app restart restores the last track
   paused at the saved timestamp, ready to resume. A **Reset data** control in the
